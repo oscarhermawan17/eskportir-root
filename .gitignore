@@ -1,3 +1,7 @@
 eksportir-api
 next-tailwind-ui
 .env*
+.DS_Store
+.idea
+.vscode
+.claude

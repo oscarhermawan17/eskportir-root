@@ -4,9 +4,9 @@
 
 Platform B2B ekspor barang dari Indonesia (fokus Bali) ke pasar internasional (Rusia & CIS).
 Platform berperan sebagai **middleman** antara Seller dan Buyer dengan proses:
-- Negosiasi difasilitasi admin
+- Negosiasi difasilitasi admin (ruang chat 3 pihak)
 - QC (Quality Check) fisik oleh tim platform
-- Escrow dana hingga pengiriman selesai
+- Escrow dana dalam USDT hingga pengiriman selesai
 - Dokumentasi ekspor digital
 - Koordinasi logistik ke bandara/pelabuhan
 
@@ -19,12 +19,13 @@ Platform berperan sebagai **middleman** antara Seller dan Buyer dengan proses:
 
 | Layer | Teknologi |
 |-------|-----------|
-| Frontend | Next.js 15, Tailwind CSS, TypeScript |
-| Backend | NestJS 11, TypeScript |
-| Database | PostgreSQL + Prisma ORM |
-| Auth | JWT (Access Token + Refresh Token) |
+| Frontend | Next.js 16, Tailwind CSS v4, TypeScript |
+| Backend | NestJS 11, TypeScript, ESM (`"type": "module"`) |
+| Database | PostgreSQL 17 (Docker) + Prisma ORM v7 |
+| Auth | JWT (Access Token) — 3 endpoint terpisah per user type |
 | File Storage | Cloudflare R2 (S3-compatible) |
 | Validation | class-validator + class-transformer |
+| API Client | Axios + SWR |
 
 ---
 
@@ -33,6 +34,7 @@ Platform berperan sebagai **middleman** antara Seller dan Buyer dengan proses:
 ```
 eksportir/
 ├── Task.md                  ← File ini
+├── CLAUDE.md                ← Briefing untuk AI (arsitektur, decisions)
 ├── README.md                ← Dokumentasi (English)
 ├── README_IND.md            ← Dokumentasi (Indonesia)
 ├── next-tailwind-ui/        ← Frontend Next.js
@@ -50,16 +52,22 @@ eksportir/
 | `ADMIN` | Proses transaksi, QC, kelola dokumen |
 | `SUPER_ADMIN` | Full akses, manajemen user, laporan |
 
+> ⚠️ Buyer dan Seller adalah **table terpisah** (bukan 1 table User). Lihat CLAUDE.md.
+
 ---
 
 ## Transaction Flow (Core Business Logic)
 
 ```
-BUYER ajukan order
+Seller listing produk (harga IDR)
       │
-ADMIN review & fasilitasi negosiasi
+BUYER ajukan order request
       │
-BUYER setuju → deposit dana (escrow)
+Ruang chat terbuka: Buyer + Seller + Admin (negosiasi)
+      │
+Admin "lock" deal → harga final dikunci dalam USD
+      │
+BUYER transfer USDT → escrow platform
       │
 ADMIN assign QC → tim QC lakukan inspeksi fisik
       │
@@ -67,7 +75,7 @@ QC lolos → ADMIN siapkan dokumen ekspor
       │
 Barang dikirim ke bandara/pelabuhan
       │
-Pengiriman dikonfirmasi → dana dicairkan ke SELLER
+Pengiriman dikonfirmasi → platform konversi USDT → IDR → transfer ke SELLER
       │
 Transaksi selesai
 ```
@@ -81,43 +89,58 @@ Transaksi selesai
 ## ✅ PHASE 0 — Setup & Infrastructure
 - [x] NestJS v11 scaffolding
 - [x] Install core dependencies (`@nestjs/config`, `@nestjs/jwt`, `passport`, `prisma`, `bcrypt`, `class-validator`, dll)
-- [x] Prisma init (`prisma/schema.prisma`, `.env`)
-- [ ] Setup `.env` dan `ConfigModule` global
-- [ ] Setup `ValidationPipe` global di `main.ts`
-- [ ] Setup Prisma Service (injectable `PrismaService`)
-- [ ] Koneksi ke PostgreSQL (lokal / cloud)
-- [ ] Struktur folder module awal
+- [x] Prisma init (`prisma/schema.prisma`, `prisma.config.ts`)
+- [x] Setup `.env` dan `ConfigModule` global
+- [x] Setup `ValidationPipe` global di `main.ts`
+- [x] Setup Prisma Service (`src/prisma/prisma.service.ts` — injectable, global)
+- [x] Koneksi ke PostgreSQL via Docker (port 5432)
+- [x] Struktur folder module awal (`src/prisma/`, `src/auth/`)
+- [x] Docker Compose setup (PostgreSQL 17 Alpine)
+- [x] Seed SuperAdmin default (`superadmin@eksportir.com` / `superadmin123`)
+- [x] CORS enabled (`http://localhost:3000`)
+- [x] Scalar API docs di `http://localhost:3001/docs`
 
 ---
 
-## 🔲 PHASE 1 — Database Schema (Prisma)
-- [ ] Model `User` (id, email, password, role, profile, timestamps)
+## 🔄 PHASE 1 — Database Schema (Prisma)
+- [x] Model `Buyer` (id, email, password, phone, nama, avatar, isActive, timestamps)
+- [x] Model `Seller` (id, email, password, phone, nama, avatar, isActive, isVerified, timestamps)
+- [x] Model `AdminUser` (id, email, password, nama, role: ADMIN|SUPER_ADMIN, isActive, timestamps)
+- [x] Jalankan `prisma migrate dev` pertama (`20260601_init`)
 - [ ] Model `Store` (milik Seller — nama toko, deskripsi, status verifikasi)
-- [ ] Model `Product` (nama, deskripsi, harga, stok, kategori, foto, store)
-- [ ] Model `Order` (buyer, seller, produk, status, total, timestamps)
+- [ ] Model `Category` (master table, dikelola Admin/SuperAdmin)
+- [ ] Model `Product` (nama, deskripsi, categoryId, storeId, isActive)
+- [ ] Model `ProductImage` (gallery foto produk, bisa banyak)
+- [ ] Model `ProductVariant` (nama free-text, harga IDR, stok, foto nullable, sku opsional)
+- [ ] Model `Order` (buyer, seller, status, harga final USD, timestamps)
 - [ ] Model `OrderItem` (detail item per order)
-- [ ] Model `Transaction` (escrow status, jumlah dana, bukti transfer)
+- [ ] Model `OrderMessage` (chat 3 pihak: buyer + seller + admin per order)
+- [ ] Model `Transaction` (USDT escrow — lihat CLAUDE.md untuk field detail)
 - [ ] Model `QCReport` (hasil inspeksi, foto, catatan, status)
 - [ ] Model `ExportDocument` (jenis dokumen, file URL, status)
 - [ ] Model `Notification` (user, pesan, read status)
-- [ ] Jalankan `prisma migrate dev` pertama
 
 ---
 
-## 🔲 PHASE 2 — Auth Module
-- [ ] `POST /auth/register` — registrasi user (default role: BUYER)
-- [ ] `POST /auth/login` — login, return access + refresh token
+## 🔄 PHASE 2 — Auth Module
+- [x] `POST /auth/buyer/register` — registrasi Buyer baru
+- [x] `POST /auth/buyer/login` — login Buyer
+- [x] `POST /auth/seller/register` — registrasi Seller baru (isVerified: false)
+- [x] `POST /auth/seller/login` — login Seller
+- [x] `POST /auth/admin/login` — login Admin & SuperAdmin (dibedakan dari `role` di response)
+- [x] JWT Strategy (single strategy, dispatch berdasarkan `userType` di payload)
+- [x] `JwtAuthGuard` (protect routes)
+- [x] Password hashing dengan `bcrypt`
 - [ ] `POST /auth/refresh` — refresh access token
 - [ ] `POST /auth/logout` — invalidate refresh token
-- [ ] JWT Strategy (`passport-jwt`)
-- [ ] `JwtAuthGuard` (protect routes)
+- [ ] `PATCH /auth/admin/change-password` — Admin ganti password
 - [ ] `RolesGuard` + `@Roles()` decorator
-- [ ] Password hashing dengan `bcrypt`
+- [ ] SuperAdmin create Admin endpoint (`POST /admin/users`)
 
 ---
 
 ## 🔲 PHASE 3 — User & Profile Module
-- [ ] `GET /users/me` — get profil sendiri
+- [ ] `GET /users/me` — get profil sendiri (Buyer / Seller / Admin)
 - [ ] `PATCH /users/me` — update profil
 - [ ] `GET /users/:id` — (Admin) lihat profil user
 - [ ] `GET /users` — (Admin) list semua user dengan filter/pagination
@@ -135,32 +158,38 @@ Transaksi selesai
 ---
 
 ## 🔲 PHASE 5 — Product Module
-- [ ] `POST /products` — (Seller) tambah produk
+- [ ] `POST /products` — (Seller) tambah produk + minimal 1 variant
 - [ ] `GET /products/my` — (Seller) lihat produk miliknya
 - [ ] `PATCH /products/:id` — (Seller) update produk
 - [ ] `DELETE /products/:id` — (Seller) hapus produk
 - [ ] `GET /products` — (Public) list produk dengan filter/pagination/search
-- [ ] `GET /products/:id` — (Public) detail produk
-- [ ] Upload foto produk ke Cloudflare R2
+- [ ] `GET /products/:id` — (Public) detail produk + variants
+- [ ] Upload foto produk (ProductImage gallery) ke Cloudflare R2
+- [ ] Upload foto variant (nullable, 1 per variant) ke Cloudflare R2
+- [ ] `GET /categories` — list kategori (public)
+- [ ] `POST /categories` — (Admin) buat kategori
+- [ ] `DELETE /categories/:id` — (Admin) hapus kategori
 
 ---
 
 ## 🔲 PHASE 6 — Order Module
-- [ ] `POST /orders` — (Buyer) buat order
+- [ ] `POST /orders` — (Buyer) buat order request
 - [ ] `GET /orders/my` — (Buyer/Seller) lihat order sendiri
 - [ ] `GET /orders/:id` — detail order
 - [ ] `PATCH /orders/:id/status` — (Admin) update status order
 - [ ] Order status flow: `PENDING` → `NEGOTIATION` → `CONFIRMED` → `PAID` → `QC_PROCESS` → `SHIPPING` → `DELIVERED` → `COMPLETED`
 - [ ] `POST /orders/:id/cancel` — cancel order
+- [ ] `POST /orders/:id/messages` — kirim pesan di ruang negosiasi
+- [ ] `GET /orders/:id/messages` — list pesan negosiasi
 
 ---
 
 ## 🔲 PHASE 7 — Transaction / Escrow Module
-- [ ] `POST /transactions/:orderId/deposit` — (Buyer) konfirmasi deposit
-- [ ] Upload bukti transfer ke R2
-- [ ] `PATCH /transactions/:id/verify` — (Admin) verifikasi pembayaran
-- [ ] `PATCH /transactions/:id/release` — (Admin) cairkan dana ke Seller
+- [ ] `POST /transactions/:orderId/deposit` — (Buyer) submit txHash USDT
+- [ ] `PATCH /transactions/:id/verify` — (Admin) verifikasi txHash di blockchain
+- [ ] `PATCH /transactions/:id/release` — (Admin) cairkan dana ke Seller (konversi USDT → IDR)
 - [ ] History transaksi per order
+- [ ] Simpan: amountUsdt, amountUsd, usdtToIdrRate, amountIdr, walletAddress, txHash, network, disbursedAt
 
 ---
 
@@ -200,7 +229,7 @@ Transaksi selesai
 ## 🔲 PHASE 12 — Admin Module
 - [ ] Dashboard summary (total order, revenue, pending QC, dll)
 - [ ] `GET /admin/orders` — list semua order dengan filter
-- [ ] `GET /admin/users` — manajemen user
+- [ ] `GET /admin/users` — manajemen user (Buyer + Seller)
 - [ ] `PATCH /admin/users/:id/status` — aktif/nonaktif user
 - [ ] `GET /admin/transactions` — semua transaksi
 
@@ -211,22 +240,24 @@ Transaksi selesai
 # FRONTEND TASKS (`next-tailwind-ui/`)
 
 ## ✅ PHASE 0 — Setup & UI Components
-- [x] Next.js 15 scaffolding
-- [x] Tailwind CSS setup
+- [x] Next.js 16 scaffolding
+- [x] Tailwind CSS v4 setup
 - [x] UI Components library (Button, Input, Modal, Table, Badge, dll — Storybook)
-- [ ] Setup `axios` / `fetch` wrapper untuk API calls
-- [ ] Setup global state (Zustand / React Context untuk auth)
-- [ ] Setup `.env.local` dengan `NEXT_PUBLIC_API_URL`
-- [ ] Layout dasar (Sidebar, Navbar, Footer)
+- [x] Setup `axios` wrapper (`lib/axios.ts`) dengan request & response interceptors
+- [x] Install SWR untuk async data fetching
+- [x] Setup `.env.local` dengan `NEXT_PUBLIC_API_URL=http://localhost:3001`
+- [ ] Setup global auth state (Zustand / Context)
+- [ ] Layout dasar Admin (Sidebar, Navbar, Header)
 
 ---
 
-## 🔲 PHASE 1 — Auth Pages
-- [ ] Halaman Login
-- [ ] Halaman Register (Buyer)
+## 🔄 PHASE 1 — Auth Pages
+- [x] Halaman Login Admin (`/admin/login`) — pakai komponen Input + Button dari Storybook
+- [ ] Halaman Login Buyer
+- [ ] Halaman Login Seller
+- [ ] Halaman Register Buyer
 - [ ] Halaman Register Seller (+ form toko)
 - [ ] Protected route middleware (`middleware.ts`)
-- [ ] Simpan token di `httpOnly cookie` atau `localStorage`
 - [ ] Auto-refresh token
 
 ---
@@ -244,8 +275,8 @@ Transaksi selesai
 - [ ] Dashboard Buyer (ringkasan order)
 - [ ] Halaman buat order baru
 - [ ] Halaman list order saya
-- [ ] Halaman detail order (timeline status)
-- [ ] Upload bukti transfer
+- [ ] Halaman detail order (timeline status + ruang chat negosiasi)
+- [ ] Submit txHash USDT (bukti bayar)
 - [ ] Lihat dokumen ekspor
 
 ---
@@ -253,25 +284,27 @@ Transaksi selesai
 ## 🔲 PHASE 4 — Seller Dashboard
 - [ ] Dashboard Seller (ringkasan produk & order)
 - [ ] Halaman kelola produk (list, tambah, edit, hapus)
-- [ ] Upload foto produk
-- [ ] Halaman order masuk
-- [ ] Halaman profil toko
+- [ ] Kelola variant produk (minimal 1)
+- [ ] Upload foto produk (gallery + per variant)
+- [ ] Halaman order masuk + ruang chat negosiasi
+- [ ] Halaman profil toko + info rekening bank
 
 ---
 
 ## 🔲 PHASE 5 — Admin Dashboard
 - [ ] Dashboard Admin (statistik platform)
-- [ ] Halaman kelola semua order
+- [ ] Halaman kelola semua order + ruang chat negosiasi
 - [ ] Halaman proses QC (input hasil, upload foto)
 - [ ] Halaman kelola dokumen ekspor (upload, list per order)
-- [ ] Halaman verifikasi pembayaran
+- [ ] Halaman verifikasi pembayaran (txHash blockchain)
 - [ ] Halaman verifikasi toko Seller
 
 ---
 
 ## 🔲 PHASE 6 — Super Admin Dashboard
 - [ ] Semua fitur Admin +
-- [ ] Halaman manajemen user (list, aktif/nonaktif)
+- [ ] Halaman manajemen user (list Buyer + Seller + Admin, aktif/nonaktif)
+- [ ] Halaman buat akun Admin baru (+ set password)
 - [ ] Halaman laporan & analitik (revenue, volume, order)
 
 ---

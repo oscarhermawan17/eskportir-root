@@ -1,0 +1,251 @@
+# CLAUDE.md — Eksportir Project Briefing
+
+File ini dibaca otomatis oleh Claude Code di setiap sesi baru.
+Berisi keputusan arsitektur, business rules, dan konteks yang tidak obvious dari kode.
+
+---
+
+## Project Overview
+
+**Eksportir** — Platform B2B ekspor barang dari Indonesia (fokus Bali) ke pasar internasional (Rusia & CIS).
+Platform berperan sebagai **middleman terkelola**: negosiasi, QC fisik, escrow dana, dokumen ekspor, koordinasi logistik.
+
+Lihat `README.md` untuk overview lengkap dan `Task.md` untuk progress tracker.
+
+---
+
+## Tech Stack
+
+| Layer | Teknologi |
+|-------|-----------|
+| Frontend | Next.js 16, Tailwind CSS v4, TypeScript |
+| Backend | NestJS 11, TypeScript, `"type": "module"` (ESM) |
+| Database | PostgreSQL 17 via Docker + Prisma ORM v7 |
+| Auth | JWT (Access Token) — 3 endpoint terpisah per user type |
+| File Storage | Cloudflare R2 (S3-compatible) |
+| Validation | class-validator + class-transformer |
+| API Client (FE) | Axios (`lib/axios.ts`) + SWR |
+
+---
+
+## Catatan Penting Prisma 7
+
+Prisma 7 mengubah cara koneksi database secara signifikan:
+
+- **`url` TIDAK lagi ada di `schema.prisma`** — URL hanya di `prisma.config.ts` (untuk CLI) dan adapter (untuk runtime)
+- **Wajib pakai `@prisma/adapter-pg`** untuk koneksi runtime:
+  ```typescript
+  import { PrismaPg } from '@prisma/adapter-pg'
+  const adapter = new PrismaPg(process.env.DATABASE_URL!)
+  super({ adapter })
+  ```
+- **`"type": "module"`** wajib ada di `package.json` karena generated client Prisma 7 menggunakan ESM (`import.meta.url`)
+- Generated client ada di `generated/prisma/client.ts` — import dengan path `../../generated/prisma/client.js`
+- Seed dikonfigurasi di `prisma.config.ts` bukan di `package.json`
+
+---
+
+## Setup Lokal
+
+### Menjalankan Backend
+```bash
+cd eksportir-api
+docker compose up -d          # PostgreSQL 17 di port 5432
+npm install
+npx prisma migrate deploy
+npx prisma db seed             # Buat SuperAdmin default
+npm run start:dev
+```
+
+### Akun Default (Development)
+| Role | Email | Password | Login Endpoint |
+|------|-------|----------|----------------|
+| SuperAdmin | superadmin@eksportir.com | superadmin123 | POST /api/auth/admin/login |
+
+### URL Lokal
+- API: `http://localhost:3001/api`
+- Scalar Docs: `http://localhost:3001/docs`
+- Frontend: `http://localhost:3000`
+
+---
+
+## Keputusan Arsitektur Database
+
+### User — 3 Table Terpisah
+
+Bukan 1 table `User` dengan kolom `role`. Alasan: concern keamanan dan separation of concern antara entitas yang fundamentally berbeda.
+
+```
+Buyer       → self-register, bebas daftar
+Seller      → self-register, butuh verifikasi admin sebelum aktif
+AdminUser   → TIDAK ada self-register, dibuat langsung oleh SuperAdmin
+```
+
+**Catatan penting:**
+- 1 orang TIDAK bisa jadi Seller sekaligus Buyer dengan 1 akun — harus beda akun
+- Boleh menggunakan nomor telepon yang sama di akun Buyer dan Seller
+- `AdminUser` memiliki field `role` enum: `ADMIN | SUPER_ADMIN`
+
+### Auth — 3 Endpoint Login Terpisah
+
+```
+POST /auth/buyer/login
+POST /auth/seller/login
+POST /auth/admin/login    ← dipakai oleh ADMIN dan SUPER_ADMIN
+```
+
+JWT payload menyimpan: `{ sub: id, userType: "buyer" | "seller" | "admin" }`
+Backend menggunakan `userType` untuk menentukan table mana yang di-lookup saat validasi token.
+Admin vs SuperAdmin dibedakan dari field `role` di response, bukan dari endpoint yang berbeda.
+
+### Admin Creation Flow
+
+- **Tidak ada invitation email, tidak ada inviteToken**
+- SuperAdmin membuat akun AdminUser dan set password langsung via endpoint
+- Pemberitahuan ke Admin dilakukan secara manual (di luar sistem)
+- Admin bisa ganti password via `PATCH /auth/admin/change-password`
+
+### Store
+
+- 1 Seller = **1 Store** (untuk saat ini, tidak multi-store)
+- Store butuh verifikasi Admin sebelum produk bisa tampil publik
+
+### Category Produk
+
+- Dikelola oleh **Admin / SuperAdmin** saja — tidak bisa dibuat Seller
+- Bukan free-text, bukan enum — melainkan **master table `Category`**
+
+### Product & Variant
+
+Struktur:
+
+```
+Product (parent)
+├── storeId
+├── nama, deskripsi
+├── categoryId       → relasi ke master table Category
+├── isActive
+├── ProductImage[]   → gallery foto produk (bisa kosong, bisa banyak)
+└── ProductVariant[] → minimal 1 variant wajib ada
+
+ProductVariant
+├── productId
+├── nama             → free-text, Seller isi sendiri (contoh: "25KG", "Merah", "Size L")
+├── harga            → dalam IDR (input Seller)
+├── stok
+├── foto             → nullable String, maksimal 1 foto per variant
+└── sku              → opsional
+```
+
+**Aturan variant:**
+- Variant bersifat **1 dimensi / simple** — nama free-text, tidak ada kombinasi atribut (ukuran × warna)
+- Minimal **1 variant wajib** ada per produk
+- Foto variant nullable — kalau kosong, FE yang handle fallback
+
+**Foto produk:**
+- `ProductImage` — untuk gallery di halaman produk (carousel di FE), bisa kosong
+- `ProductVariant.foto` — 1 foto per variant, nullable
+
+---
+
+## Keputusan Mata Uang & Pembayaran
+
+### Alur Lengkap
+
+```
+Seller input harga listing  → IDR
+Negosiasi & harga final     → USD (dikunci Admin setelah deal)
+Buyer bayar                 → USDT (TRC20 / ERC20)
+                              *Alasan: Rusia diblokir dari SWIFT*
+Platform terima             → USDT (escrow di wallet platform)
+Platform konversi           → USDT → IDR (kurs saat pencairan)
+Seller menerima             → IDR via transfer bank lokal
+```
+
+### Schema Transaction (penting untuk audit trail)
+
+```
+Transaction
+├── amountUsdt        → USDT yang diterima dari Buyer
+├── amountUsd         → equivalent USD (≈ 1:1 dengan USDT)
+├── usdtToIdrRate     → kurs USDT/IDR saat konversi
+├── amountIdr         → IDR yang ditransfer ke Seller
+├── platformFeeUsdt   → fee platform (jika ada)
+├── walletAddress     → alamat wallet platform penerima
+├── txHash            → transaction hash blockchain (bukti bayar)
+├── network           → "TRC20" | "ERC20"
+├── status            → PENDING | CONFIRMED | RELEASED | REFUNDED
+└── disbursedAt       → timestamp pencairan ke Seller
+```
+
+Verifikasi pembayaran menggunakan **txHash di blockchain explorer**, bukan screenshot transfer bank.
+
+### SellerProfile — Info Rekening Bank
+
+```
+SellerProfile
+├── bankName
+├── bankAccountNumber
+├── bankAccountName
+└── ...
+```
+
+Dibutuhkan saat platform mentransfer IDR ke Seller setelah transaksi selesai.
+
+---
+
+## Alur Negosiasi (Order Flow)
+
+Order di platform ini **tidak langsung fixed price** — ada ruang negosiasi setelah order request masuk.
+
+```
+1. Seller listing produk (harga awal = asking price dalam IDR)
+2. Buyer tertarik → buat Order Request
+3. Ruang chat terbuka: Buyer + Seller + Admin (3 pihak)
+4. Negosiasi harga, kuantitas, syarat pengiriman
+5. Admin "lock" deal → harga final dikunci dalam USD
+6. Buyer transfer USDT → escrow platform (submit txHash)
+7. Admin assign QC
+8. QC lolos → dokumen ekspor disiapkan
+9. Barang dikirim
+10. Pengiriman dikonfirmasi → platform konversi USDT → IDR → transfer ke Seller
+```
+
+Perlu table `OrderMessage` untuk menyimpan chat 3 pihak per order.
+
+---
+
+## Hal-hal yang Belum Diputuskan
+
+- [ ] Fee platform — berapa persen, siapa yang menanggung?
+- [ ] Apakah ada fitur rating/review Seller oleh Buyer?
+- [ ] Refund flow — kalau QC gagal, USDT dikembalikan ke Buyer?
+- [ ] Notifikasi — realtime (WebSocket) atau polling?
+
+---
+
+## Konvensi Kode
+
+### Backend (NestJS)
+
+- Semua import file lokal wajib pakai ekstensi `.js` (karena ESM + `nodenext` module resolution)
+  ```typescript
+  import { AuthService } from './auth.service.js'  // ✅
+  import { AuthService } from './auth.service'      // ❌
+  ```
+- Gunakan `ConfigService` untuk semua env var, jangan akses `process.env` langsung di service/controller
+- Response error dari `ValidationPipe` adalah array — handle di FE dengan `Array.isArray(msg)`
+- CORS dikonfigurasi di `main.ts` — tambahkan origin baru di sini saat deploy ke staging/production
+
+### Frontend (Next.js)
+
+- Gunakan `api` instance dari `@/lib/axios` — **jangan buat axios instance baru**
+- Token disimpan di `localStorage` key `accessToken` dan `user`
+- Response interceptor di `lib/axios.ts` otomatis redirect ke `/admin/login` kalau 401
+- Gunakan SWR dengan axios fetcher untuk semua GET request:
+  ```typescript
+  const fetcher = (url: string) => api.get(url).then(r => r.data)
+  const { data } = useSWR('/api/users/me', fetcher)
+  ```
+- Selalu pakai design token dari `globals.css` — jangan hardcode warna hex
+- Komponen ada di `stories/` — import langsung, jangan buat komponen baru kalau sudah ada
