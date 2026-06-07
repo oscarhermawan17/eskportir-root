@@ -1,0 +1,79 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: eksportir-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: eksportir
+      POSTGRES_PASSWORD: eksportir_secret
+      POSTGRES_DB: eksportir
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U eksportir -d eksportir"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - eksportir-net
+
+  api:
+    image: ghcr.io/oscarhermawan17/eksportir-api:latest
+    build:
+      context: ./eksportir-api
+    container_name: eksportir-api
+    restart: unless-stopped
+    env_file: ./eksportir-api/.env
+    environment:
+      DATABASE_URL: postgresql://eksportir:eksportir_secret@postgres:5432/eksportir
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - eksportir-net
+
+  web:
+    image: ghcr.io/oscarhermawan17/eksportir-web:latest
+    build:
+      context: ./next-tailwind-ui
+      target: web
+      args:
+        NEXT_PUBLIC_API_URL: http://projectbali.my.id
+    container_name: eksportir-web
+    restart: unless-stopped
+    depends_on:
+      - api
+    networks:
+      - eksportir-net
+
+  storybook:
+    image: ghcr.io/oscarhermawan17/eksportir-storybook:latest
+    build:
+      context: ./next-tailwind-ui
+      target: storybook
+    container_name: eksportir-storybook
+    restart: unless-stopped
+    networks:
+      - eksportir-net
+
+  nginx:
+    image: nginx:alpine
+    container_name: eksportir-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - api
+      - web
+      - storybook
+    networks:
+      - eksportir-net
+
+networks:
+  eksportir-net:
+    driver: bridge
+
+volumes:
+  postgres_data:
