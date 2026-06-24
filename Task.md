@@ -26,6 +26,7 @@ Platform berperan sebagai **middleman** antara Seller dan Buyer dengan proses:
 | File Storage | Cloudflare R2 (S3-compatible) |
 | Validation | class-validator + class-transformer |
 | API Client | Axios + SWR |
+| i18n | next-intl (EN + RU untuk public/buyer, EN + ID untuk seller/admin) |
 
 ---
 
@@ -210,7 +211,24 @@ Transaksi selesai
 
 ---
 
-## 🔲 PHASE 10 — Storage Module (Cloudflare R2)
+## 🔲 PHASE 10A — Exchange Rate Module (Backend)
+
+> Kurs disimpan di DB, diperbarui via cron. Admin bisa pantau, SuperAdmin bisa override manual.
+> Pasangan: USD→RUB, USD→CNY, USDT→IDR.
+
+- [ ] Model `ExchangeRate` di Prisma (fromCurrency, toCurrency, rate, source: AUTO|MANUAL, updatedBy, updatedAt)
+- [ ] Migrasi & seed data kurs awal (input manual pertama kali)
+- [ ] `ExchangeRateService` — get kurs terkini per pasangan
+- [ ] `GET /exchange-rates` — (Public) ambil semua kurs terkini
+- [ ] `GET /exchange-rates/:from/:to` — (Public) ambil kurs spesifik
+- [ ] `PATCH /exchange-rates/:from/:to` — (SuperAdmin only) input/update kurs manual
+- [ ] Catat `source: MANUAL` dan `updatedBy` saat update
+- [ ] `GET /admin/exchange-rates/history` — (Admin) riwayat perubahan kurs
+- [ ] _(Future)_ Cron job otomatis dari frankfurter.app (USD→RUB, USD→CNY) + CoinGecko (USDT→IDR)
+
+---
+
+## 🔲 PHASE 10B — Storage Module (Cloudflare R2)
 - [ ] Setup `StorageService` dengan AWS SDK v3
 - [ ] `uploadFile(file, folder)` — upload ke R2
 - [ ] `deleteFile(key)` — hapus dari R2
@@ -248,6 +266,42 @@ Transaksi selesai
 - [x] Setup `.env.local` dengan `NEXT_PUBLIC_API_URL=http://localhost:3001`
 - [ ] Setup global auth state (Zustand / Context)
 - [ ] Layout dasar Admin (Sidebar, Navbar, Header)
+
+---
+
+## 🔲 PHASE 0B — Internationalization (i18n) Setup
+
+> next-intl untuk locale routing. UI elements wajib diterjemahkan, konten produk/chat TIDAK.
+
+### Bahasa per area
+| Area | Bahasa tersedia | Default |
+|------|----------------|---------|
+| Public + Buyer | EN, RU | EN |
+| Seller dashboard | EN, ID | EN |
+| Admin dashboard | EN, ID | EN |
+
+### Tasks
+- [ ] Install & konfigurasi `next-intl`
+- [ ] Setup locale routing: `/en/...` dan `/ru/...` untuk public/buyer
+- [ ] Buat file translation: `messages/en.json`, `messages/ru.json`, `messages/id.json`
+- [ ] `middleware.ts` — detect locale dari Accept-Language header, cookie, atau URL prefix
+- [ ] Komponen `LocaleSwitcher` — tombol ganti bahasa (EN ↔ RU atau EN ↔ ID)
+- [ ] Terjemahkan semua UI component yang sudah ada (Button label, placeholder, alert text)
+- [ ] Integrasi `LocaleSwitcher` ke Navbar public, Navbar seller, Navbar admin
+
+---
+
+## 🔲 PHASE 0C — Currency Display Setup (Frontend)
+
+> Default tampilan harga dalam USD. Buyer bisa switch ke RUB atau CNY (display only, bukan payment).
+
+- [ ] Komponen `CurrencySelector` — dropdown USD / RUB / CNY
+- [ ] Global currency state (Zustand atau Context) — persist di localStorage
+- [ ] Hook `usePrice(amountUsd)` — konversi ke currency yang dipilih pakai kurs dari API
+- [ ] Integrasi `CurrencySelector` di Navbar public (terlihat saat browsing produk)
+- [ ] Tampilkan harga yang sudah dikonversi di card produk, halaman detail produk, summary order
+- [ ] Disclaimer kecil di bawah harga: _"Prices in RUB/CNY are indicative. Actual payment in USDT."_
+- [ ] Fetch kurs dari `GET /exchange-rates` via SWR (cache, auto-refresh interval)
 
 ---
 

@@ -141,6 +141,8 @@ ProductVariant
 - Variant bersifat **1 dimensi / simple** — nama free-text, tidak ada kombinasi atribut (ukuran × warna)
 - Minimal **1 variant wajib** ada per produk
 - Foto variant nullable — kalau kosong, FE yang handle fallback
+- Kebanyakan Seller UMKM Bali akan membuat **1 produk = 1 variant** ("Default") — sistem harus tetap simpel, jangan paksa UI yang ribet
+- Kalau Seller hanya punya 1 jenis, cukup isi nama variant "Default" atau nama produknya langsung
 
 **Foto produk:**
 - `ProductImage` — untuk gallery di halaman produk (carousel di FE), bisa kosong
@@ -215,12 +217,79 @@ Perlu table `OrderMessage` untuk menyimpan chat 3 pihak per order.
 
 ---
 
+## Keputusan Internasionalisasi (i18n)
+
+### Library
+`next-intl` — untuk Next.js App Router, locale-based routing.
+
+### Bahasa per Area
+
+| Area | Bahasa | Default |
+|------|--------|---------|
+| Public pages (landing, produk, toko) | EN + RU | EN |
+| Buyer dashboard | EN + RU | EN |
+| Seller dashboard | EN + ID | EN |
+| Admin dashboard | EN + ID | EN |
+
+### Struktur URL
+```
+/en/products        ← English (public & buyer)
+/ru/products        ← Russian (public & buyer)
+/seller/...         ← Seller dashboard (EN/ID, tanpa locale prefix di URL)
+/admin/...          ← Admin dashboard (EN/ID, tanpa locale prefix di URL)
+```
+
+### Aturan Konten
+- **UI elements** (tombol, label, navbar, footer, alert, warning, form placeholder) → wajib diterjemahkan
+- **Konten produk** (nama, deskripsi, nama varian) → TIDAK diterjemahkan, tetap bahasa Seller (ID/EN/Bali)
+- **Konten chat/negosiasi** → TIDAK diterjemahkan, apa adanya
+- Translation file ada di `next-tailwind-ui/messages/en.json` dan `ru.json` (dan `id.json` untuk seller/admin)
+
+---
+
+## Keputusan Currency Display
+
+### Prinsip Utama
+- **Harga listing Seller** → IDR (input Seller)
+- **Harga deal dikunci** → USD (Admin lock setelah negosiasi)
+- **Actual payment** → USDT (TRC20/ERC20)
+- **Display ke Buyer** → USD (default), bisa switch ke RUB atau CNY (hanya tampilan, bukan pembayaran)
+
+RUB dan CNY adalah **purely cosmetic** — untuk kenyamanan browsing Buyer dari pasar Rusia/CIS.
+CNY disertakan karena Buyer Rusia kemungkinan menggunakan Yuan sebagai jalur konversi ke USDT (akibat sanksi SWIFT).
+Selalu tampilkan disclaimer kecil: **"Prices in RUB/CNY are indicative. Actual payment in USDT."**
+
+### Sumber Kurs
+Kurs disimpan di DB. **SuperAdmin input manual dulu** — cron job otomatis dipikirkan belakangan.
+Admin dapat **memantau** kurs terkini di dashboard.
+**SuperAdmin** dapat melakukan **override manual** kurs kapan saja (otorisasi tertinggi).
+Pasangan kurs yang dikelola: `USD→RUB`, `USD→CNY`, `USDT→IDR`.
+
+> Rencana ke depan: cron job dari frankfurter.app (fiat) + CoinGecko (USDT→IDR), keduanya gratis.
+> SuperAdmin tetap bisa override manual bahkan setelah cron aktif.
+
+### Schema `ExchangeRate`
+```
+ExchangeRate
+├── id
+├── fromCurrency  → "USD" | "USDT"
+├── toCurrency    → "RUB" | "CNY" | "IDR"
+├── rate          → Decimal (presisi tinggi)
+├── source        → "AUTO" | "MANUAL" (siapa yang set)
+├── updatedBy     → nullable, AdminUser.id (kalau manual)
+└── updatedAt     → timestamp
+```
+
+---
+
 ## Hal-hal yang Belum Diputuskan
 
 - [ ] Fee platform — berapa persen, siapa yang menanggung?
 - [ ] Apakah ada fitur rating/review Seller oleh Buyer?
 - [ ] Refund flow — kalau QC gagal, USDT dikembalikan ke Buyer?
 - [ ] Notifikasi — realtime (WebSocket) atau polling?
+- [ ] Sumber API kurs otomatis (Fixer.io, ExchangeRate-API, atau lainnya)?
+- [ ] Interval cron job update kurs (setiap jam, setiap 6 jam?)?
 
 ---
 
