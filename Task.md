@@ -1,5 +1,31 @@
 # Eksportir — Project Task Board
 
+> **Status ringkas (2026-06-25):** DB schema ✅ · Auth+RolesGuard ✅ · Category/Store/Product API ✅ · Storage R2+Upload ✅ · Seller product UI ✅ · Landing katalog + detail produk ✅
+> UI hidup: `/` (katalog), `/products/[id]`, `/seller/{login,register,store,products}`, `/buyer/{login,register}`, `/admin/{login,categories,stores}`
+> API: `http://localhost:3001/api` · Docs (Scalar): `http://localhost:3001/docs` · FE: `http://localhost:3000`
+> Data fetching FE: **SWR + Axios**. Upload: **upload-first + staging→commit**. Seeder: `npm run seed:sellers` (4 seller, pw `seller123`). Berikutnya: **nav seller / list-detail toko / order flow**.
+
+## Ringkasan Progres per Fase
+
+> ✅ selesai · 🔄 sebagian · 🔲 belum mulai. Detail centang ada di tiap fase di bawah.
+
+| Backend | Status | | Frontend | Status |
+|---------|--------|---|----------|--------|
+| 0 · Setup & Infra | ✅ | | 0 · Setup & UI Components | 🔄 (auth state & layout admin belum) |
+| 1 · DB Schema | ✅ | | 0B · i18n (next-intl) | 🔲 |
+| 2 · Auth | 🔄 (refresh/logout/change-pw/create-admin belum) | | 0C · Currency display | 🔲 |
+| 3 · User & Profile | 🔲 | | 1 · Auth Pages | 🔄 (middleware & refresh belum) |
+| 4 · Store | ✅ | | 2 · Public Pages | 🔄 (katalog+detail ✅, toko belum) |
+| 5 · Product (+Category) | ✅ | | 3 · Buyer Dashboard | 🔲 |
+| 6 · Order | 🔲 | | 4 · Seller Dashboard | 🔄 (produk+toko ✅, order & bank belum) |
+| 7 · Transaction/Escrow | 🔲 | | 5 · Admin Dashboard | 🔄 (kategori+verifikasi toko ✅, sisanya belum) |
+| 8 · QC | 🔲 | | 6 · Super Admin Dashboard | 🔲 |
+| 9 · Export Document | 🔲 | | 7 · Notification & UX | 🔲 |
+| 10A · Exchange Rate | 🔲 (model ✅) | | | |
+| 10B · Storage R2 + Upload | ✅ | | | |
+| 11 · Notification | 🔲 | | | |
+| 12 · Admin | 🔲 | | | |
+
 ## Project Context
 
 Platform B2B ekspor barang dari Indonesia (fokus Bali) ke pasar internasional (Rusia & CIS).
@@ -98,28 +124,30 @@ Transaksi selesai
 - [x] Struktur folder module awal (`src/prisma/`, `src/auth/`)
 - [x] Docker Compose setup (PostgreSQL 17 Alpine)
 - [x] Seed SuperAdmin default (`superadmin@eksportir.com` / `superadmin123`)
-- [x] CORS enabled (`http://localhost:3000`)
+- [x] CORS enabled (`http://localhost:3000` + `http://localhost:3002`)
 - [x] Scalar API docs di `http://localhost:3001/docs`
 
 ---
 
-## 🔄 PHASE 1 — Database Schema (Prisma)
+## ✅ PHASE 1 — Database Schema (Prisma)
 - [x] Model `Buyer` (id, email, password, phone, nama, avatar, isActive, timestamps)
 - [x] Model `Seller` (id, email, password, phone, nama, avatar, isActive, isVerified, timestamps)
 - [x] Model `AdminUser` (id, email, password, nama, role: ADMIN|SUPER_ADMIN, isActive, timestamps)
 - [x] Jalankan `prisma migrate dev` pertama (`20260601_init`)
-- [ ] Model `Store` (milik Seller — nama toko, deskripsi, status verifikasi)
-- [ ] Model `Category` (master table, dikelola Admin/SuperAdmin)
-- [ ] Model `Product` (nama, deskripsi, categoryId, storeId, isActive)
-- [ ] Model `ProductImage` (gallery foto produk, bisa banyak)
-- [ ] Model `ProductVariant` (nama free-text, harga IDR, stok, foto nullable, sku opsional)
-- [ ] Model `Order` (buyer, seller, status, harga final USD, timestamps)
-- [ ] Model `OrderItem` (detail item per order)
-- [ ] Model `OrderMessage` (chat 3 pihak: buyer + seller + admin per order)
-- [ ] Model `Transaction` (USDT escrow — lihat CLAUDE.md untuk field detail)
-- [ ] Model `QCReport` (hasil inspeksi, foto, catatan, status)
-- [ ] Model `ExportDocument` (jenis dokumen, file URL, status)
-- [ ] Model `Notification` (user, pesan, read status)
+- [x] Model `Store` (milik Seller — nama toko, deskripsi, status verifikasi)
+- [x] Model `Category` (master table, dikelola Admin/SuperAdmin)
+- [x] Model `Product` (nama, deskripsi, categoryId, storeId, isActive)
+- [x] Model `ProductImage` (gallery foto produk, bisa banyak)
+- [x] Model `ProductVariant` (nama free-text, harga IDR, stok, foto nullable, sku opsional)
+- [x] Model `SellerProfile` (info rekening bank: bankName, bankAccountNumber, bankAccountName)
+- [x] Model `Order` (buyer, seller, status, harga final USD, timestamps)
+- [x] Model `OrderItem` (detail item per order — snapshot nama/harga produk)
+- [x] Model `OrderMessage` (chat 3 pihak: buyer + seller + admin per order)
+- [x] Model `Transaction` (USDT escrow — lihat CLAUDE.md untuk field detail)
+- [x] Model `QCReport` (hasil inspeksi, foto, catatan, status)
+- [x] Model `ExportDocument` (jenis dokumen, file URL, status)
+- [x] Model `Notification` (user, pesan, read status)
+- [x] Migrasi `add_store_category_product` + `add_order_transaction_qc_docs_notif_rate`
 
 ---
 
@@ -135,7 +163,7 @@ Transaksi selesai
 - [ ] `POST /auth/refresh` — refresh access token
 - [ ] `POST /auth/logout` — invalidate refresh token
 - [ ] `PATCH /auth/admin/change-password` — Admin ganti password
-- [ ] `RolesGuard` + `@Roles()` decorator
+- [x] `RolesGuard` + `@Roles()` decorator (+ `@CurrentUser()` decorator)
 - [ ] SuperAdmin create Admin endpoint (`POST /admin/users`)
 
 ---
@@ -148,28 +176,32 @@ Transaksi selesai
 
 ---
 
-## 🔲 PHASE 4 — Store Module (Seller)
-- [ ] `POST /stores` — Seller buat toko
-- [ ] `GET /stores/my` — Seller lihat tokonya
-- [ ] `PATCH /stores/my` — Seller update info toko
-- [ ] `GET /stores` — (Public) list toko aktif
-- [ ] `GET /stores/:id` — (Public) detail toko
-- [ ] `PATCH /stores/:id/verify` — (Admin) verifikasi toko
+## ✅ PHASE 4 — Store Module (Seller)
+- [x] `POST /stores` — Seller buat toko
+- [x] `GET /stores/my` — Seller lihat tokonya
+- [x] `PATCH /stores/my` — Seller update info toko
+- [x] `GET /stores` — (Public) list toko aktif & terverifikasi
+- [x] `GET /stores/:id` — (Public) detail toko
+- [x] `PATCH /stores/:id/verify` — (Admin) verifikasi toko
+- [x] `GET /stores/admin/all` — (Admin) list semua toko untuk verifikasi
 
 ---
 
-## 🔲 PHASE 5 — Product Module
-- [ ] `POST /products` — (Seller) tambah produk + minimal 1 variant
-- [ ] `GET /products/my` — (Seller) lihat produk miliknya
-- [ ] `PATCH /products/:id` — (Seller) update produk
-- [ ] `DELETE /products/:id` — (Seller) hapus produk
-- [ ] `GET /products` — (Public) list produk dengan filter/pagination/search
-- [ ] `GET /products/:id` — (Public) detail produk + variants
-- [ ] Upload foto produk (ProductImage gallery) ke Cloudflare R2
-- [ ] Upload foto variant (nullable, 1 per variant) ke Cloudflare R2
-- [ ] `GET /categories` — list kategori (public)
-- [ ] `POST /categories` — (Admin) buat kategori
-- [ ] `DELETE /categories/:id` — (Admin) hapus kategori
+## ✅ PHASE 5 — Product Module
+- [x] `POST /products` — (Seller) tambah produk + minimal 1 variant
+- [x] `GET /products/my` — (Seller) lihat produk miliknya
+- [x] `PATCH /products/:id` — (Seller) update produk (variants/imageUrls = replace, reconcile R2)
+- [x] `DELETE /products/:id` — (Seller) hapus produk (+ hapus foto di R2)
+- [x] `GET /products` — (Public) list produk dengan filter/pagination/search
+- [x] `GET /products/:id` — (Public) detail produk + variants
+- [x] Upload foto produk (ProductImage gallery) ke R2 — via upload-first + `commitFile`
+- [x] Upload foto variant (nullable, 1 per variant) ke R2 — via `commitFile` folder `variants/`
+- [x] ✔ Terverifikasi e2e: upload→commit (tmp/→products/), ownership guard, filter publik, cleanup
+- [x] **Frontend** Seller UI kelola produk (list/tambah/edit/hapus + FileUpload) — ✔ terverifikasi di browser
+- [x] **Frontend** Public catalog (`/`) + detail produk (`/products/[id]`) — ✔ terverifikasi di browser
+- [x] `GET /categories` — list kategori (public)
+- [x] `POST /categories` — (Admin) buat kategori
+- [x] `DELETE /categories/:id` — (Admin) hapus kategori (ditolak jika masih dipakai produk)
 
 ---
 
@@ -216,7 +248,7 @@ Transaksi selesai
 > Kurs disimpan di DB, diperbarui via cron. Admin bisa pantau, SuperAdmin bisa override manual.
 > Pasangan: USD→RUB, USD→CNY, USDT→IDR.
 
-- [ ] Model `ExchangeRate` di Prisma (fromCurrency, toCurrency, rate, source: AUTO|MANUAL, updatedBy, updatedAt)
+- [x] Model `ExchangeRate` di Prisma (fromCurrency, toCurrency, rate, source: AUTO|MANUAL, updatedBy, updatedAt)
 - [ ] Migrasi & seed data kurs awal (input manual pertama kali)
 - [ ] `ExchangeRateService` — get kurs terkini per pasangan
 - [ ] `GET /exchange-rates` — (Public) ambil semua kurs terkini
@@ -228,11 +260,15 @@ Transaksi selesai
 
 ---
 
-## 🔲 PHASE 10B — Storage Module (Cloudflare R2)
-- [ ] Setup `StorageService` dengan AWS SDK v3
-- [ ] `uploadFile(file, folder)` — upload ke R2
-- [ ] `deleteFile(key)` — hapus dari R2
-- [ ] `getSignedUrl(key)` — generate presigned URL
+## ✅ PHASE 10B — Storage Module (Cloudflare R2) + Upload
+- [x] Setup `StorageService` dengan AWS SDK v3 (`src/storage/`, `@Global`)
+- [x] `uploadFile(file, folder)` — upload ke R2, return URL publik
+- [x] `deleteFile(publicFileUrl)` — hapus dari R2
+- [x] Isi kredensial R2 di `.env` (bucket `eksportir-prod`, public URL aktif)
+- [x] Pola **upload-first + staging→commit**: `uploadTemp()`, `commitFile(tmpUrl, dest)`, `cleanupTemp()`
+- [x] `POST /uploads` — endpoint universal (1 file → `tmp/`), validasi size 2MB + MIME + magic bytes
+- [x] Cron harian 03:00 (`@nestjs/schedule`) — hapus `tmp/` > 24 jam (orphan cleanup)
+- [ ] `getSignedUrl(key)` — presigned URL (opsional; saat ini pakai public bucket URL)
 
 ---
 
@@ -260,7 +296,7 @@ Transaksi selesai
 ## ✅ PHASE 0 — Setup & UI Components
 - [x] Next.js 16 scaffolding
 - [x] Tailwind CSS v4 setup
-- [x] UI Components library (Button, Input, Modal, Table, Badge, dll — Storybook)
+- [x] UI Components library (Button, Input, Modal, Table, Badge, Card, Alert, FileUpload, Pagination, dll — Storybook)
 - [x] Setup `axios` wrapper (`lib/axios.ts`) dengan request & response interceptors
 - [x] Install SWR untuk async data fetching
 - [x] Setup `.env.local` dengan `NEXT_PUBLIC_API_URL=http://localhost:3001`
@@ -307,21 +343,24 @@ Transaksi selesai
 
 ## 🔄 PHASE 1 — Auth Pages
 - [x] Halaman Login Admin (`/admin/login`) — pakai komponen Input + Button dari Storybook
-- [ ] Halaman Login Buyer
-- [ ] Halaman Login Seller
-- [ ] Halaman Register Buyer
-- [ ] Halaman Register Seller (+ form toko)
+- [x] Halaman Login Buyer (`/buyer/login`)
+- [x] Halaman Login Seller (`/seller/login`)
+- [x] Halaman Register Buyer (`/buyer/register`)
+- [x] Halaman Register Seller (`/seller/register`) — form toko menyusul di Seller dashboard (Store dibuat via `POST /stores` setelah login, bukan saat register)
+- [x] Komponen `AuthShell` (`app/_components/AuthShell.tsx`) — chrome bersama untuk semua halaman auth
 - [ ] Protected route middleware (`middleware.ts`)
 - [ ] Auto-refresh token
 
 ---
 
-## 🔲 PHASE 2 — Public Pages
-- [ ] Homepage (landing page, hero, featured products)
-- [ ] Halaman list produk (filter, search, pagination)
-- [ ] Halaman detail produk
+## 🔄 PHASE 2 — Public Pages
+- [x] Homepage / katalog (`/`) — navbar + hero + search + filter kategori + grid + pagination (IDR). ✔ verified
+- [x] List produk (filter, search, pagination) — menyatu di homepage
+- [x] Halaman detail produk (`/products/[id]`) — galeri + variant + harga. ✔ verified
 - [ ] Halaman list toko
 - [ ] Halaman detail toko
+- [x] Seeder: 4 seller × 5 produk (`npm run seed:sellers`, password `seller123`)
+> Harga tampil IDR. Currency display USD/RUB/CNY = Phase 0C (belum).
 
 ---
 
@@ -335,13 +374,14 @@ Transaksi selesai
 
 ---
 
-## 🔲 PHASE 4 — Seller Dashboard
+## 🔄 PHASE 4 — Seller Dashboard
 - [ ] Dashboard Seller (ringkasan produk & order)
-- [ ] Halaman kelola produk (list, tambah, edit, hapus)
-- [ ] Kelola variant produk (minimal 1)
-- [ ] Upload foto produk (gallery + per variant)
+- [x] Halaman kelola produk (`/seller/products` list, `/new`, `/[id]/edit`) — ✔ terverifikasi e2e di browser
+- [x] Kelola variant produk (minimal 1, tambah/hapus baris di form)
+- [x] Upload foto produk (gallery + per variant) via komponen `FileUpload`
 - [ ] Halaman order masuk + ruang chat negosiasi
-- [ ] Halaman profil toko + info rekening bank
+- [x] Halaman kelola toko (`/seller/store`) — buat & edit info toko + status verifikasi
+- [ ] Info rekening bank (SellerProfile) di halaman toko
 
 ---
 
@@ -351,7 +391,8 @@ Transaksi selesai
 - [ ] Halaman proses QC (input hasil, upload foto)
 - [ ] Halaman kelola dokumen ekspor (upload, list per order)
 - [ ] Halaman verifikasi pembayaran (txHash blockchain)
-- [ ] Halaman verifikasi toko Seller
+- [x] Halaman verifikasi toko Seller (`/admin/stores`)
+- [x] Halaman kelola kategori (`/admin/categories`)
 
 ---
 

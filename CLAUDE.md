@@ -14,6 +14,75 @@ Lihat `README.md` untuk overview lengkap dan `Task.md` untuk progress tracker.
 
 ---
 
+## Status Saat Ini (snapshot per 2026-06-25)
+
+### Sudah dikerjakan
+- **DB schema lengkap** — semua model inti + enum sudah dimigrasi (Buyer, Seller, AdminUser, SellerProfile, Store, Category, Product, ProductImage, ProductVariant, Order, OrderItem, OrderMessage, Transaction, QCReport, ExportDocument, Notification, ExchangeRate).
+- **Auth** — register/login Buyer, Seller, Admin (3 endpoint terpisah), JWT, `JwtAuthGuard`, `RolesGuard` + `@Roles()` + `@CurrentUser()`.
+- **Category module** — `GET` (public), `POST`/`DELETE` (admin).
+- **Store module** — `POST`/`GET my`/`PATCH my` (seller), `GET`/`GET :id` (public), `PATCH :id/verify` + `GET admin/all` (admin).
+- **Product module** — `POST`/`GET my`/`PATCH :id`/`DELETE :id` (seller), `GET` (public, search+filter+pagination)/`GET :id` (public). Foto via pola upload-first + `commitFile`. Terverifikasi e2e.
+- **Upload module** — `POST /uploads` (semua user login): upload 1 gambar ke staging `tmp/` di R2, return `{ url }`. Validasi size 2MB + MIME + magic bytes.
+- **Storage R2** — kredensial sudah terisi, bucket `eksportir-prod`, public URL aktif. Pola staging→commit lengkap (lihat "Keputusan Upload File").
+- **Cron** — `@nestjs/schedule` aktif; cleanup `tmp/` tiap hari jam 03:00 (file > 24 jam dihapus).
+
+### Endpoint API yang hidup (`http://localhost:3001/api`)
+`auth/{buyer,seller}/{register,login}`, `auth/admin/login`, `categories` (GET/POST/DELETE), `stores` (POST, GET, GET :id, GET my, PATCH my, PATCH :id/verify, GET admin/all), `products` (POST, GET my, PATCH :id, DELETE :id, GET, GET :id), `uploads` (POST).
+
+### Halaman UI yang sudah ada (`http://localhost:3000`)
+| Path | Untuk |
+|------|-------|
+| `/` | **Katalog publik** — grid produk, search, filter kategori, pagination (harga IDR) |
+| `/products/[id]` | **Detail produk publik** — galeri + variant + harga |
+| `/admin/login` | Login Admin/SuperAdmin |
+| `/buyer/login`, `/buyer/register` | Auth Buyer |
+| `/seller/login`, `/seller/register` | Auth Seller |
+| `/seller/store` | Seller buat/edit toko |
+| `/seller/products`, `/seller/products/new`, `/seller/products/[id]/edit` | Seller kelola produk |
+| `/admin/categories` | Admin kelola kategori |
+| `/admin/stores` | Admin verifikasi toko |
+
+> **Seeder demo:** `cd eksportir-api && npm run seed:sellers` → 4 seller (semua pw `seller123`: budi/wayan/made/kadek @eksportir.com) masing-masing 5 produk verified. Foto = picsum (data bohongan).
+
+### URL penting
+- API: `http://localhost:3001/api`
+- **Scalar API Docs: `http://localhost:3001/docs`** (sudah aktif sejak Phase 0; endpoint baru otomatis terdokumentasi via decorator `@ApiTags`/`@ApiOperation`)
+- Frontend: `http://localhost:3000`
+
+### Arsitektur data-fetching Frontend
+- **SWR + Axios** (BUKAN React Query). GET pakai `useSWR` + fetcher axios; mutasi pakai `api.post/patch/delete` lalu `mutate()`. Selalu import instance `@/lib/axios`, jangan bikin axios baru.
+- Belum ada global auth state / middleware proteksi route — halaman protected mengandalkan token di `localStorage` + interceptor 401 (akan dirapikan di phase auth state).
+
+> ⚠️ **Agent Skills:** project punya `next-tailwind-ui/.agents/skills/` (`vercel-react-best-practices`, `tailwind-design-system`). Wajib dibaca & diikuti saat menulis/refactor kode React/Next.
+
+---
+
+## Keputusan Upload File (penting)
+
+Upload **dipisah dari submit data** — bukan multipart sekaligus. Pola **upload-first + staging→commit**:
+
+```
+1. FE upload file   → POST /api/uploads (multipart, 1 file)
+                      → BE validasi (size 2MB, MIME, magic bytes)
+                      → simpan ke R2 folder tmp/  → return { url: ".../tmp/uuid.jpg" }
+2. FE isi form      → POST /api/products (JSON murni, sertakan url dari step 1)
+                      → BE storage.commitFile(tmpUrl, 'products')
+                        = copy tmp/uuid.jpg → products/uuid.jpg, lalu delete tmp/uuid.jpg
+                      → URL FINAL (products/...) yang disimpan ke DB, bukan tmp/
+3. Orphan cleanup   → cron harian 03:00 hapus tmp/ yang > 24 jam (file tak ter-commit)
+```
+
+**Alasan keputusan:**
+- Upload terpisah → request data tetap JSON murni; user bisa upload sambil isi form; bisa preview sebelum submit; retry granular.
+- Validasi **hanya** di Backend yang mengikat (FE bisa di-bypass via curl/Postman). Magic-bytes dicek karena MIME header bisa dipalsukan.
+- File **tidak pernah dieksekusi** di BE — hanya buffer di RAM lalu stream ke R2 (object storage tidak execute apapun). Aman dari "malicious file".
+- Staging `tmp/` → commit memudahkan cleanup orphan (cukup hapus semua `tmp/` lama). Di R2 tidak ada "move", jadi commit = copy + delete object.
+
+**API StorageService:** `uploadTemp(file)`, `commitFile(tmpUrl, destFolder)`, `cleanupTemp(maxAgeHours)`, plus `uploadFile`/`deleteFile` lama.
+**Penting:** entitas yang punya foto WAJIB panggil `commitFile` saat create/update; simpan URL hasil commit, jangan URL `tmp/`.
+
+---
+
 ## Tech Stack
 
 | Layer | Teknologi |
