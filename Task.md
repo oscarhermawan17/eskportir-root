@@ -17,7 +17,7 @@
 | 3 · User & Profile | 🔲 | | 1 · Auth Pages | 🔄 (middleware & refresh belum) |
 | 4 · Store | ✅ | | 2 · Public Pages | 🔄 (katalog+detail ✅, toko belum) |
 | 5 · Product (+Category) | ✅ | | 3 · Buyer Dashboard | 🔲 |
-| 6 · Order | 🔲 | | 4 · Seller Dashboard | 🔄 (produk+toko ✅, order & bank belum) |
+| 6 · Order | ✅ (backend) | | 4 · Seller Dashboard | 🔄 (produk+toko ✅, order & bank belum) |
 | 7 · Transaction/Escrow | 🔲 | | 5 · Admin Dashboard | 🔄 (kategori+verifikasi toko ✅, sisanya belum) |
 | 8 · QC | 🔲 | | 6 · Super Admin Dashboard | 🔲 |
 | 9 · Export Document | 🔲 | | 7 · Notification & UX | 🔲 |
@@ -205,15 +205,19 @@ Transaksi selesai
 
 ---
 
-## 🔲 PHASE 6 — Order Module
-- [ ] `POST /orders` — (Buyer) buat order request
-- [ ] `GET /orders/my` — (Buyer/Seller) lihat order sendiri
-- [ ] `GET /orders/:id` — detail order
-- [ ] `PATCH /orders/:id/status` — (Admin) update status order
-- [ ] Order status flow: `PENDING` → `NEGOTIATION` → `CONFIRMED` → `PAID` → `QC_PROCESS` → `SHIPPING` → `DELIVERED` → `COMPLETED`
-- [ ] `POST /orders/:id/cancel` — cancel order
-- [ ] `POST /orders/:id/messages` — kirim pesan di ruang negosiasi
-- [ ] `GET /orders/:id/messages` — list pesan negosiasi
+## ✅ PHASE 6 — Order Module (backend e2e ✅ 30/30)
+- [x] `POST /orders` — (Buyer) buat order request: `{ sellerId, items[], note? }`, 1 order = 1 seller, item validasi + snapshot nama/harga, `note` jadi pesan pembuka chat
+- [x] `GET /orders/my` — role-aware (Buyer: order saya, Seller: order masuk ke toko)
+- [x] `GET /orders/:id` — detail + items + seluruh chat (cek akses: buyer pemilik / seller toko / admin)
+- [x] `PATCH /orders/:id/status` — (Admin) majukan status fulfillment (blok status terminal)
+- [x] `PATCH /orders/:id/lock` — (Admin) kunci harga final USD → `CONFIRMED` (+ `lockedAt`)
+- [x] Order status flow: `PENDING` → `NEGOTIATION` (auto saat ada pesan) → `CONFIRMED` (lock) → `PAID` → `QC_PROCESS` → `SHIPPING` → `DELIVERED` → `COMPLETED`
+- [x] `PATCH /orders/:id/cancel` — (Buyer) cancel, hanya saat `PENDING`/`NEGOTIATION`
+- [x] `POST /orders/:id/messages` — kirim pesan ke ruang negosiasi 3 pihak
+- [x] `GET /orders` — (Admin) list semua order + filter `?status=`
+- [x] List pesan negosiasi → sudah embedded di `GET /orders/:id` (1 fetch), tak perlu endpoint terpisah
+- [x] Migrasi `add_order_note` (kolom `note` di `orders`)
+- Catatan: Cart hidup di FE (localStorage), checkout per-seller. Backend tak butuh tabel Cart.
 
 ---
 

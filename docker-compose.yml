@@ -34,30 +34,6 @@ services:
     networks:
       - eksportir-net
 
-  web:
-    image: ghcr.io/oscarhermawan17/eksportir-web:latest
-    build:
-      context: ./next-tailwind-ui
-      target: web
-      args:
-        NEXT_PUBLIC_API_URL: http://projectbali.my.id
-    container_name: eksportir-web
-    restart: unless-stopped
-    depends_on:
-      - api
-    networks:
-      - eksportir-net
-
-  storybook:
-    image: ghcr.io/oscarhermawan17/eksportir-storybook:latest
-    build:
-      context: ./next-tailwind-ui
-      target: storybook
-    container_name: eksportir-storybook
-    restart: unless-stopped
-    networks:
-      - eksportir-net
-
   nginx:
     image: nginx:alpine
     container_name: eksportir-nginx
@@ -70,8 +46,7 @@ services:
       - /etc/letsencrypt:/etc/letsencrypt:ro
     depends_on:
       - api
-      - web
-      - storybook
+      - umkm-api
     networks:
       - eksportir-net
 

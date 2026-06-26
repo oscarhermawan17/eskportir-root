@@ -27,7 +27,9 @@ Lihat `README.md` untuk overview lengkap dan `Task.md` untuk progress tracker.
 - **Cron** — `@nestjs/schedule` aktif; cleanup `tmp/` tiap hari jam 03:00 (file > 24 jam dihapus).
 
 ### Endpoint API yang hidup (`http://localhost:3001/api`)
-`auth/{buyer,seller}/{register,login}`, `auth/admin/login`, `categories` (GET/POST/DELETE), `stores` (POST, GET, GET :id, GET my, PATCH my, PATCH :id/verify, GET admin/all), `products` (POST, GET my, PATCH :id, DELETE :id, GET, GET :id), `uploads` (POST).
+`auth/{buyer,seller}/{register,login}`, `auth/admin/login`, `categories` (GET/POST/DELETE), `stores` (POST, GET, GET :id, GET my, PATCH my, PATCH :id/verify, GET admin/all), `products` (POST, GET my, PATCH :id, DELETE :id, GET, GET :id), `uploads` (POST), `orders` (POST [buyer], GET my [buyer/seller], GET :id [pemilik], POST :id/messages, PATCH :id/cancel [buyer], GET [admin], PATCH :id/lock [admin], PATCH :id/status [admin]).
+
+> **Order module (Phase 6) — backend selesai, e2e 30/30.** 1 order = 1 seller; item di-snapshot (nama+harga IDR) saat dibuat; `note` buyer jadi pesan pembuka chat 3 pihak. Status: `PENDING` → `NEGOTIATION` (auto saat pesan pertama masuk) → `CONFIRMED` (admin `lock` harga final USD) → `PAID`/`QC_PROCESS`/`SHIPPING`/… (admin `status`). Cancel buyer hanya saat PENDING/NEGOTIATION. **Cart hidup di FE (localStorage), checkout per-seller — backend tak punya tabel Cart.** Detail order sudah meng-embed seluruh `messages` (1 fetch, tak perlu endpoint list pesan terpisah).
 
 ### Halaman UI yang sudah ada (`http://localhost:3000`)
 | Path | Untuk |
