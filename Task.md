@@ -1,35 +1,36 @@
 # Eksportir — Project Task Board
 
-> **Status ringkas (2026-06-25):** DB schema ✅ · Auth+RolesGuard ✅ · Category/Store/Product API ✅ · Storage R2+Upload ✅ · Seller product UI ✅ · Landing katalog + detail produk ✅
-> UI hidup: `/` (katalog), `/products/[id]`, `/seller/{login,register,store,products}`, `/buyer/{login,register}`, `/admin/{login,categories,stores}`
+> **Status ringkas (2026-07-07):** DB schema ✅ · Auth+RolesGuard ✅ · Category/Store/Product API ✅ · Storage R2+Upload ✅ · Seller product UI ✅ · Landing katalog + detail produk ✅ · Buyer Dashboard (order flow + chat) ✅ · **Seller Dashboard order UI + SidebarShell migration ✅**
+> UI hidup: `/` (katalog), `/products/[id]` (+ add to cart), `/seller/{login,register,store,products,orders,orders/[id]}`, `/buyer/{login,register,dashboard,orders,orders/[id],orders/new}`, `/admin/{login,categories,stores}`
 > API: `http://localhost:3001/api` · Docs (Scalar): `http://localhost:3001/docs` · FE: `http://localhost:3000`
-> Data fetching FE: **SWR + Axios**. Upload: **upload-first + staging→commit**. Seeder: `npm run seed:sellers` (4 seller, pw `seller123`). Berikutnya: **nav seller / list-detail toko / order flow**.
+> Data fetching FE: **SWR + Axios**. Upload: **upload-first + staging→commit**. Seeder: `npm run seed:sellers` (4 seller, pw `seller123`). Berikutnya: **[PRIORITAS] Sinkronisasi field buyer detail page ↔ backend** · Admin order UI · Exchange Rate · SellerProfile bank info.
 
 ## Ringkasan Progres per Fase
 
 > ✅ selesai · 🔄 sebagian · 🔲 belum mulai. Detail centang ada di tiap fase di bawah.
 
-| Backend | Status | | Frontend | Status |
-|---------|--------|---|----------|--------|
-| 0 · Setup & Infra | ✅ | | 0 · Setup & UI Components | 🔄 (auth state & layout admin belum) |
-| 1 · DB Schema | ✅ | | 0B · i18n (next-intl) | 🔲 |
-| 2 · Auth | 🔄 (refresh/logout/change-pw/create-admin belum) | | 0C · Currency display | 🔲 |
-| 3 · User & Profile | 🔲 | | 1 · Auth Pages | 🔄 (middleware & refresh belum) |
-| 4 · Store | ✅ | | 2 · Public Pages | 🔄 (katalog+detail ✅, toko belum) |
-| 5 · Product (+Category) | ✅ | | 3 · Buyer Dashboard | 🔲 |
-| 6 · Order | ✅ (backend) | | 4 · Seller Dashboard | 🔄 (produk+toko ✅, order & bank belum) |
-| 7 · Transaction/Escrow | 🔲 | | 5 · Admin Dashboard | 🔄 (kategori+verifikasi toko ✅, sisanya belum) |
-| 8 · QC | 🔲 | | 6 · Super Admin Dashboard | 🔲 |
-| 9 · Export Document | 🔲 | | 7 · Notification & UX | 🔲 |
-| 10A · Exchange Rate | 🔲 (model ✅) | | | |
-| 10B · Storage R2 + Upload | ✅ | | | |
-| 11 · Notification | 🔲 | | | |
-| 12 · Admin | 🔲 | | | |
+| Backend                   | Status                                           |     | Frontend                  | Status                                          |
+| ------------------------- | ------------------------------------------------ | --- | ------------------------- | ----------------------------------------------- |
+| 0 · Setup & Infra         | ✅                                               |     | 0 · Setup & UI Components | 🔄 (auth state belum)                           |
+| 1 · DB Schema             | ✅                                               |     | 0B · i18n (next-intl)     | 🔲                                              |
+| 2 · Auth                  | 🔄 (refresh/logout/change-pw/create-admin belum) |     | 0C · Currency display     | 🔲                                              |
+| 3 · User & Profile        | 🔲                                               |     | 1 · Auth Pages            | 🔄 (middleware & refresh belum)                 |
+| 4 · Store                 | ✅                                               |     | 2 · Public Pages          | 🔄 (katalog+detail ✅, toko belum)              |
+| 5 · Product (+Category)   | ✅                                               |     | 3 · Buyer Dashboard       | 🔄 (order flow+chat ✅, txHash+dokumen belum)   |
+| 6 · Order                 | ✅ (backend)                                     |     | 4 · Seller Dashboard      | 🔄 (produk+toko+landing+order UI ✅, bank belum) |
+| 7 · Transaction/Escrow    | 🔲                                               |     | 5 · Admin Dashboard       | 🔄 (kategori+verifikasi toko ✅, sisanya belum) |
+| 8 · QC                    | 🔲                                               |     | 6 · Super Admin Dashboard | 🔲                                              |
+| 9 · Export Document       | 🔲                                               |     | 7 · Notification & UX     | 🔲                                              |
+| 10A · Exchange Rate       | 🔲 (model ✅)                                    |     |                           |                                                 |
+| 10B · Storage R2 + Upload | ✅                                               |     |                           |                                                 |
+| 11 · Notification         | 🔲                                               |     |                           |                                                 |
+| 12 · Admin                | 🔲                                               |     |                           |                                                 |
 
 ## Project Context
 
 Platform B2B ekspor barang dari Indonesia (fokus Bali) ke pasar internasional (Rusia & CIS).
 Platform berperan sebagai **middleman** antara Seller dan Buyer dengan proses:
+
 - Negosiasi difasilitasi admin (ruang chat 3 pihak)
 - QC (Quality Check) fisik oleh tim platform
 - Escrow dana dalam USDT hingga pengiriman selesai
@@ -43,16 +44,16 @@ Platform berperan sebagai **middleman** antara Seller dan Buyer dengan proses:
 
 ## Tech Stack
 
-| Layer | Teknologi |
-|-------|-----------|
-| Frontend | Next.js 16, Tailwind CSS v4, TypeScript |
-| Backend | NestJS 11, TypeScript, ESM (`"type": "module"`) |
-| Database | PostgreSQL 17 (Docker) + Prisma ORM v7 |
-| Auth | JWT (Access Token) — 3 endpoint terpisah per user type |
-| File Storage | Cloudflare R2 (S3-compatible) |
-| Validation | class-validator + class-transformer |
-| API Client | Axios + SWR |
-| i18n | next-intl (EN + RU untuk public/buyer, EN + ID untuk seller/admin) |
+| Layer        | Teknologi                                                          |
+| ------------ | ------------------------------------------------------------------ |
+| Frontend     | Next.js 16, Tailwind CSS v4, TypeScript                            |
+| Backend      | NestJS 11, TypeScript, ESM (`"type": "module"`)                    |
+| Database     | PostgreSQL 17 (Docker) + Prisma ORM v7                             |
+| Auth         | JWT (Access Token) — 3 endpoint terpisah per user type             |
+| File Storage | Cloudflare R2 (S3-compatible)                                      |
+| Validation   | class-validator + class-transformer                                |
+| API Client   | Axios + SWR                                                        |
+| i18n         | next-intl (EN + RU untuk public/buyer, EN + ID untuk seller/admin) |
 
 ---
 
@@ -72,12 +73,12 @@ eksportir/
 
 ## Role System
 
-| Role | Deskripsi |
-|------|-----------|
-| `SELLER` | Daftar toko, kelola produk, lihat order masuk |
-| `BUYER` | Browse produk, ajukan order, pantau status |
-| `ADMIN` | Proses transaksi, QC, kelola dokumen |
-| `SUPER_ADMIN` | Full akses, manajemen user, laporan |
+| Role          | Deskripsi                                     |
+| ------------- | --------------------------------------------- |
+| `SELLER`      | Daftar toko, kelola produk, lihat order masuk |
+| `BUYER`       | Browse produk, ajukan order, pantau status    |
+| `ADMIN`       | Proses transaksi, QC, kelola dokumen          |
+| `SUPER_ADMIN` | Full akses, manajemen user, laporan           |
 
 > ⚠️ Buyer dan Seller adalah **table terpisah** (bukan 1 table User). Lihat CLAUDE.md.
 
@@ -114,6 +115,7 @@ Transaksi selesai
 # BACKEND TASKS (`eksportir-api/`)
 
 ## ✅ PHASE 0 — Setup & Infrastructure
+
 - [x] NestJS v11 scaffolding
 - [x] Install core dependencies (`@nestjs/config`, `@nestjs/jwt`, `passport`, `prisma`, `bcrypt`, `class-validator`, dll)
 - [x] Prisma init (`prisma/schema.prisma`, `prisma.config.ts`)
@@ -130,6 +132,7 @@ Transaksi selesai
 ---
 
 ## ✅ PHASE 1 — Database Schema (Prisma)
+
 - [x] Model `Buyer` (id, email, password, phone, nama, avatar, isActive, timestamps)
 - [x] Model `Seller` (id, email, password, phone, nama, avatar, isActive, isVerified, timestamps)
 - [x] Model `AdminUser` (id, email, password, nama, role: ADMIN|SUPER_ADMIN, isActive, timestamps)
@@ -152,6 +155,7 @@ Transaksi selesai
 ---
 
 ## 🔄 PHASE 2 — Auth Module
+
 - [x] `POST /auth/buyer/register` — registrasi Buyer baru
 - [x] `POST /auth/buyer/login` — login Buyer
 - [x] `POST /auth/seller/register` — registrasi Seller baru (isVerified: false)
@@ -169,6 +173,7 @@ Transaksi selesai
 ---
 
 ## 🔲 PHASE 3 — User & Profile Module
+
 - [ ] `GET /users/me` — get profil sendiri (Buyer / Seller / Admin)
 - [ ] `PATCH /users/me` — update profil
 - [ ] `GET /users/:id` — (Admin) lihat profil user
@@ -177,6 +182,7 @@ Transaksi selesai
 ---
 
 ## ✅ PHASE 4 — Store Module (Seller)
+
 - [x] `POST /stores` — Seller buat toko
 - [x] `GET /stores/my` — Seller lihat tokonya
 - [x] `PATCH /stores/my` — Seller update info toko
@@ -188,6 +194,7 @@ Transaksi selesai
 ---
 
 ## ✅ PHASE 5 — Product Module
+
 - [x] `POST /products` — (Seller) tambah produk + minimal 1 variant
 - [x] `GET /products/my` — (Seller) lihat produk miliknya
 - [x] `PATCH /products/:id` — (Seller) update produk (variants/imageUrls = replace, reconcile R2)
@@ -206,6 +213,7 @@ Transaksi selesai
 ---
 
 ## ✅ PHASE 6 — Order Module (backend e2e ✅ 30/30)
+
 - [x] `POST /orders` — (Buyer) buat order request: `{ sellerId, items[], note? }`, 1 order = 1 seller, item validasi + snapshot nama/harga, `note` jadi pesan pembuka chat
 - [x] `GET /orders/my` — role-aware (Buyer: order saya, Seller: order masuk ke toko)
 - [x] `GET /orders/:id` — detail + items + seluruh chat (cek akses: buyer pemilik / seller toko / admin)
@@ -222,6 +230,7 @@ Transaksi selesai
 ---
 
 ## 🔲 PHASE 7 — Transaction / Escrow Module
+
 - [ ] `POST /transactions/:orderId/deposit` — (Buyer) submit txHash USDT
 - [ ] `PATCH /transactions/:id/verify` — (Admin) verifikasi txHash di blockchain
 - [ ] `PATCH /transactions/:id/release` — (Admin) cairkan dana ke Seller (konversi USDT → IDR)
@@ -231,6 +240,7 @@ Transaksi selesai
 ---
 
 ## 🔲 PHASE 8 — QC Module
+
 - [ ] `POST /qc/:orderId` — (Admin) buat laporan QC
 - [ ] Upload foto hasil QC ke R2
 - [ ] `PATCH /qc/:id` — update hasil QC
@@ -240,6 +250,7 @@ Transaksi selesai
 ---
 
 ## 🔲 PHASE 9 — Export Document Module
+
 - [ ] `POST /documents/:orderId` — (Admin) upload dokumen ekspor
 - [ ] Tipe dokumen: Invoice, Packing List, COO, Phytosanitary, dll
 - [ ] `GET /documents/:orderId` — list dokumen per order
@@ -265,6 +276,7 @@ Transaksi selesai
 ---
 
 ## ✅ PHASE 10B — Storage Module (Cloudflare R2) + Upload
+
 - [x] Setup `StorageService` dengan AWS SDK v3 (`src/storage/`, `@Global`)
 - [x] `uploadFile(file, folder)` — upload ke R2, return URL publik
 - [x] `deleteFile(publicFileUrl)` — hapus dari R2
@@ -277,6 +289,7 @@ Transaksi selesai
 ---
 
 ## 🔲 PHASE 11 — Notification Module
+
 - [ ] `GET /notifications` — list notifikasi user
 - [ ] `PATCH /notifications/:id/read` — tandai dibaca
 - [ ] `PATCH /notifications/read-all` — tandai semua dibaca
@@ -285,6 +298,7 @@ Transaksi selesai
 ---
 
 ## 🔲 PHASE 12 — Admin Module
+
 - [ ] Dashboard summary (total order, revenue, pending QC, dll)
 - [ ] `GET /admin/orders` — list semua order dengan filter
 - [ ] `GET /admin/users` — manajemen user (Buyer + Seller)
@@ -297,15 +311,20 @@ Transaksi selesai
 
 # FRONTEND TASKS (`next-tailwind-ui/`)
 
-## ✅ PHASE 0 — Setup & UI Components
+## 🔄 PHASE 0 — Setup & UI Components
+
 - [x] Next.js 16 scaffolding
 - [x] Tailwind CSS v4 setup
 - [x] UI Components library (Button, Input, Modal, Table, Badge, Card, Alert, FileUpload, Pagination, dll — Storybook)
 - [x] Setup `axios` wrapper (`lib/axios.ts`) dengan request & response interceptors
 - [x] Install SWR untuk async data fetching
 - [x] Setup `.env.local` dengan `NEXT_PUBLIC_API_URL=http://localhost:3001`
+- [x] `SidebarShell` — layout wrapper sidebar kiri (desktop) + bottom navbar (mobile) untuk semua dashboard
+- [x] `BottomNav` — mobile-only fixed bottom navigation
+- [x] Shared `OrderStatusBadge` + `OrderStatusTimeline` (`app/_components/`) — dipakai buyer & seller
+- [x] Nav config seller (`app/seller/_nav.ts`) — Dashboard · Produk · Toko · Pesanan
 - [ ] Setup global auth state (Zustand / Context)
-- [ ] Layout dasar Admin (Sidebar, Navbar, Header)
+- [ ] Layout dasar Admin (pakai SidebarShell)
 
 ---
 
@@ -314,13 +333,15 @@ Transaksi selesai
 > next-intl untuk locale routing. UI elements wajib diterjemahkan, konten produk/chat TIDAK.
 
 ### Bahasa per area
-| Area | Bahasa tersedia | Default |
-|------|----------------|---------|
-| Public + Buyer | EN, RU | EN |
-| Seller dashboard | EN, ID | EN |
-| Admin dashboard | EN, ID | EN |
+
+| Area             | Bahasa tersedia | Default |
+| ---------------- | --------------- | ------- |
+| Public + Buyer   | EN, RU          | EN      |
+| Seller dashboard | EN, ID          | EN      |
+| Admin dashboard  | EN, ID          | EN      |
 
 ### Tasks
+
 - [ ] Install & konfigurasi `next-intl`
 - [ ] Setup locale routing: `/en/...` dan `/ru/...` untuk public/buyer
 - [ ] Buat file translation: `messages/en.json`, `messages/ru.json`, `messages/id.json`
@@ -346,6 +367,7 @@ Transaksi selesai
 ---
 
 ## 🔄 PHASE 1 — Auth Pages
+
 - [x] Halaman Login Admin (`/admin/login`) — pakai komponen Input + Button dari Storybook
 - [x] Halaman Login Buyer (`/buyer/login`)
 - [x] Halaman Login Seller (`/seller/login`)
@@ -358,38 +380,48 @@ Transaksi selesai
 ---
 
 ## 🔄 PHASE 2 — Public Pages
+
 - [x] Homepage / katalog (`/`) — navbar + hero + search + filter kategori + grid + pagination (IDR). ✔ verified
 - [x] List produk (filter, search, pagination) — menyatu di homepage
 - [x] Halaman detail produk (`/products/[id]`) — galeri + variant + harga. ✔ verified
 - [ ] Halaman list toko
 - [ ] Halaman detail toko
 - [x] Seeder: 4 seller × 5 produk (`npm run seed:sellers`, password `seller123`)
-> Harga tampil IDR. Currency display USD/RUB/CNY = Phase 0C (belum).
+  > Harga tampil IDR. Currency display USD/RUB/CNY = Phase 0C (belum).
 
 ---
 
-## 🔲 PHASE 3 — Buyer Dashboard
-- [ ] Dashboard Buyer (ringkasan order)
-- [ ] Halaman buat order baru
-- [ ] Halaman list order saya
-- [ ] Halaman detail order (timeline status + ruang chat negosiasi)
-- [ ] Submit txHash USDT (bukti bayar)
-- [ ] Lihat dokumen ekspor
+## � PHASE 3 — Buyer Dashboard
+
+> ⚠️ **Prioritas berikutnya:** halaman buyer detail masih memakai nama field yang tidak sinkron dengan response backend (`content`, `nama`, `harga`, `qty`, `senderType` uppercase, `senderName`). Backend sebenarnya mengembalikan `pesan`, `namaProduk`, `namaVariant`, `hargaIdr`, `quantity`, `senderType` lowercase (`buyer`/`seller`/`admin`), dan tidak ada `senderName`. Halaman seller sudah benar; buyer perlu diselaraskan agar chat & item pesanan render dengan benar.
+
+- [ ] **[PRIORITAS]** Sinkronkan field FE ↔ BE di `buyer/orders/[id]/page.tsx`: `content`→`pesan`, `nama`→`namaProduk`, `harga`→`hargaIdr`, `qty`→`quantity`, `senderType` uppercase→lowercase, hapus dependency `senderName` (pakai label statis "Buyer"/"Seller"/"Admin" sesuai `senderType`)
+- [ ] **[PRIORITAS]** Cek juga `buyer/orders/page.tsx` & `buyer/orders/new/page.tsx` untuk field yang sama
+- [x] Dashboard Buyer (`/buyer`) — summary card total/aktif/selesai + recent orders + quick links
+- [x] Halaman list order saya (`/buyer/orders`) — list semua order dengan status badge
+- [x] Halaman detail order (`/buyer/orders/[id]`) — timeline status + items + chat negosiasi 3 pihak + cancel
+- [x] Halaman buat order baru (`/buyer/orders/new`) — checkout dari cart localStorage + note + qty stepper
+- [x] Add to Cart di halaman detail produk — pilih variant + qty + toast + warning ganti seller
+- [ ] Submit txHash USDT (bukti bayar) — tunggu Phase 7 Backend
+- [ ] Lihat dokumen ekspor — tunggu Phase 9 Backend
 
 ---
 
 ## 🔄 PHASE 4 — Seller Dashboard
-- [ ] Dashboard Seller (ringkasan produk & order)
-- [x] Halaman kelola produk (`/seller/products` list, `/new`, `/[id]/edit`) — ✔ terverifikasi e2e di browser
+
+- [x] Dashboard Seller (`/seller`) — pakai SidebarShell + summary card (total/perlu dibalas/selesai) + recent orders + quick links
+- [x] Halaman kelola produk (`/seller/products` list, `/new`, `/[id]/edit`) — dimigrasi ke SidebarShell
 - [x] Kelola variant produk (minimal 1, tambah/hapus baris di form)
 - [x] Upload foto produk (gallery + per variant) via komponen `FileUpload`
-- [ ] Halaman order masuk + ruang chat negosiasi
-- [x] Halaman kelola toko (`/seller/store`) — buat & edit info toko + status verifikasi
+- [x] Halaman order masuk (`/seller/orders`) — list + filter tab (Semua/Perlu Dibalas/Diproses/Selesai·Batal) dengan counter
+- [x] Halaman detail order (`/seller/orders/[id]`) — timeline status + items + ruang chat 3 pihak (polling 10 dtk)
+- [x] Halaman kelola toko (`/seller/store`) — dimigrasi ke SidebarShell + status verifikasi
 - [ ] Info rekening bank (SellerProfile) di halaman toko
 
 ---
 
 ## 🔲 PHASE 5 — Admin Dashboard
+
 - [ ] Dashboard Admin (statistik platform)
 - [ ] Halaman kelola semua order + ruang chat negosiasi
 - [ ] Halaman proses QC (input hasil, upload foto)
@@ -401,6 +433,7 @@ Transaksi selesai
 ---
 
 ## 🔲 PHASE 6 — Super Admin Dashboard
+
 - [ ] Semua fitur Admin +
 - [ ] Halaman manajemen user (list Buyer + Seller + Admin, aktif/nonaktif)
 - [ ] Halaman buat akun Admin baru (+ set password)
@@ -409,6 +442,7 @@ Transaksi selesai
 ---
 
 ## 🔲 PHASE 7 — Notification & UX
+
 - [ ] Komponen notifikasi (dropdown di navbar)
 - [ ] Toast notification untuk aksi (sukses, error)
 - [ ] Loading skeleton untuk tabel & list
@@ -432,9 +466,9 @@ Transaksi selesai
 
 ## Progress Legend
 
-| Simbol | Status |
-|--------|--------|
-| `[x]` | Selesai ✅ |
-| `[ ]` | Belum dikerjakan 🔲 |
-| `[~]` | Sedang dikerjakan 🔄 |
-| `[-]` | Di-skip / tidak jadi ❌ |
+| Simbol | Status                  |
+| ------ | ----------------------- |
+| `[x]`  | Selesai ✅              |
+| `[ ]`  | Belum dikerjakan 🔲     |
+| `[~]`  | Sedang dikerjakan 🔄    |
+| `[-]`  | Di-skip / tidak jadi ❌ |
