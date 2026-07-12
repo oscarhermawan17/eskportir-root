@@ -1,6 +1,6 @@
 # Eksportir — Project Task Board
 
-> **Status ringkas (2026-07-07):** DB schema ✅ · Auth+RolesGuard ✅ · Category/Store/Product API ✅ · Storage R2+Upload ✅ · Seller product UI ✅ · Landing katalog + detail produk ✅ · Buyer Dashboard (order flow + chat) ✅ · **Seller Dashboard order UI + SidebarShell migration ✅**
+> **Status ringkas (2026-07-11):** DB schema ✅ · Auth+RolesGuard ✅ · Category/Store/Product API ✅ · Order API (e2e 30/30) ✅ · Storage R2+Upload ✅ · Seller product UI ✅ · Landing katalog + detail produk ✅ · Buyer Dashboard (order flow + chat) ✅ · Seller Dashboard order UI + SidebarShell migration ✅ · Shared `OrderStatusBadge`/`OrderStatusTimeline` di buyer & seller ✅ (PLAN.md 100% selesai)
 > UI hidup: `/` (katalog), `/products/[id]` (+ add to cart), `/seller/{login,register,store,products,orders,orders/[id]}`, `/buyer/{login,register,dashboard,orders,orders/[id],orders/new}`, `/admin/{login,categories,stores}`
 > API: `http://localhost:3001/api` · Docs (Scalar): `http://localhost:3001/docs` · FE: `http://localhost:3000`
 > Data fetching FE: **SWR + Axios**. Upload: **upload-first + staging→commit**. Seeder: `npm run seed:sellers` (4 seller, pw `seller123`). Berikutnya: **[PRIORITAS] Sinkronisasi field buyer detail page ↔ backend** · Admin order UI · Exchange Rate · SellerProfile bank info.
@@ -9,22 +9,22 @@
 
 > ✅ selesai · 🔄 sebagian · 🔲 belum mulai. Detail centang ada di tiap fase di bawah.
 
-| Backend                   | Status                                           |     | Frontend                  | Status                                          |
-| ------------------------- | ------------------------------------------------ | --- | ------------------------- | ----------------------------------------------- |
-| 0 · Setup & Infra         | ✅                                               |     | 0 · Setup & UI Components | 🔄 (auth state belum)                           |
-| 1 · DB Schema             | ✅                                               |     | 0B · i18n (next-intl)     | 🔲                                              |
-| 2 · Auth                  | 🔄 (refresh/logout/change-pw/create-admin belum) |     | 0C · Currency display     | 🔲                                              |
-| 3 · User & Profile        | 🔲                                               |     | 1 · Auth Pages            | 🔄 (middleware & refresh belum)                 |
-| 4 · Store                 | ✅                                               |     | 2 · Public Pages          | 🔄 (katalog+detail ✅, toko belum)              |
-| 5 · Product (+Category)   | ✅                                               |     | 3 · Buyer Dashboard       | 🔄 (order flow+chat ✅, txHash+dokumen belum)   |
+| Backend                   | Status                                           |     | Frontend                  | Status                                           |
+| ------------------------- | ------------------------------------------------ | --- | ------------------------- | ------------------------------------------------ |
+| 0 · Setup & Infra         | ✅                                               |     | 0 · Setup & UI Components | 🔄 (auth state belum)                            |
+| 1 · DB Schema             | ✅                                               |     | 0B · i18n (next-intl)     | 🔲                                               |
+| 2 · Auth                  | 🔄 (refresh/logout/change-pw/create-admin belum) |     | 0C · Currency display     | 🔲                                               |
+| 3 · User & Profile        | 🔲                                               |     | 1 · Auth Pages            | 🔄 (middleware & refresh belum)                  |
+| 4 · Store                 | ✅                                               |     | 2 · Public Pages          | 🔄 (katalog+detail ✅, toko belum)               |
+| 5 · Product (+Category)   | ✅                                               |     | 3 · Buyer Dashboard       | 🔄 (order flow+chat ✅, txHash+dokumen belum)    |
 | 6 · Order                 | ✅ (backend)                                     |     | 4 · Seller Dashboard      | 🔄 (produk+toko+landing+order UI ✅, bank belum) |
-| 7 · Transaction/Escrow    | 🔲                                               |     | 5 · Admin Dashboard       | 🔄 (kategori+verifikasi toko ✅, sisanya belum) |
-| 8 · QC                    | 🔲                                               |     | 6 · Super Admin Dashboard | 🔲                                              |
-| 9 · Export Document       | 🔲                                               |     | 7 · Notification & UX     | 🔲                                              |
-| 10A · Exchange Rate       | 🔲 (model ✅)                                    |     |                           |                                                 |
-| 10B · Storage R2 + Upload | ✅                                               |     |                           |                                                 |
-| 11 · Notification         | 🔲                                               |     |                           |                                                 |
-| 12 · Admin                | 🔲                                               |     |                           |                                                 |
+| 7 · Transaction/Escrow    | 🔲                                               |     | 5 · Admin Dashboard       | 🔄 (kategori+verifikasi toko ✅, sisanya belum)  |
+| 8 · QC                    | 🔲                                               |     | 6 · Super Admin Dashboard | 🔲                                               |
+| 9 · Export Document       | 🔲                                               |     | 7 · Notification & UX     | 🔲                                               |
+| 10A · Exchange Rate       | 🔲 (model ✅)                                    |     |                           |                                                  |
+| 10B · Storage R2 + Upload | ✅                                               |     |                           |                                                  |
+| 11 · Notification         | 🔲                                               |     |                           |                                                  |
+| 12 · Admin                | 🔲                                               |     |                           |                                                  |
 
 ## Project Context
 
@@ -48,12 +48,30 @@ Platform berperan sebagai **middleman** antara Seller dan Buyer dengan proses:
 | ------------ | ------------------------------------------------------------------ |
 | Frontend     | Next.js 16, Tailwind CSS v4, TypeScript                            |
 | Backend      | NestJS 11, TypeScript, ESM (`"type": "module"`)                    |
-| Database     | PostgreSQL 17 (Docker) + Prisma ORM v7                             |
+| Database     | **Supabase** (PostgreSQL managed) + Prisma ORM v7                  |
 | Auth         | JWT (Access Token) — 3 endpoint terpisah per user type             |
 | File Storage | Cloudflare R2 (S3-compatible)                                      |
 | Validation   | class-validator + class-transformer                                |
 | API Client   | Axios + SWR                                                        |
 | i18n         | next-intl (EN + RU untuk public/buyer, EN + ID untuk seller/admin) |
+
+---
+
+## Infra & Environment Notes
+
+### Database — Supabase (sejak 2026-07-12)
+
+- DB lokal (Docker PostgreSQL) **sudah dihapus**. Satu-satunya DB adalah Supabase.
+- `DATABASE_URL` → pooler port **6543** (`?pgbouncer=true`) — dipakai runtime app (PrismaService).
+- `DIRECT_URL` → pooler port **5432** — dipakai Prisma CLI (`prisma migrate deploy`, `prisma db seed`).
+- `docker-compose.yml` di VPS tidak lagi punya service `postgres` — hanya `api`, `nginx`, `umkm-api`.
+- Local dev: cukup `npm run start:dev` di `eksportir-api/`, tidak perlu Docker untuk DB.
+
+### ⚠️ Prisma Migrate — Wajib via Jaringan TELKOMSEL
+
+- `prisma migrate deploy` / `prisma migrate dev` / `prisma generate` ke Supabase **hanya berhasil dari koneksi Telkomsel**.
+- Koneksi lain (WiFi tertentu, ISP lain) konsisten gagal — diduga ada pemblokiran port atau routing ke server Supabase AP-Southeast.
+- **Solusi:** pastikan laptop terhubung ke hotspot Telkomsel saat menjalankan perintah Prisma migrate.
 
 ---
 

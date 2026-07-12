@@ -14,44 +14,56 @@ Lihat `README.md` untuk overview lengkap dan `Task.md` untuk progress tracker.
 
 ---
 
-## Status Saat Ini (snapshot per 2026-06-25)
+## Status Saat Ini (snapshot per 2026-07-12)
 
 ### Sudah dikerjakan
+
 - **DB schema lengkap** — semua model inti + enum sudah dimigrasi (Buyer, Seller, AdminUser, SellerProfile, Store, Category, Product, ProductImage, ProductVariant, Order, OrderItem, OrderMessage, Transaction, QCReport, ExportDocument, Notification, ExchangeRate).
 - **Auth** — register/login Buyer, Seller, Admin (3 endpoint terpisah), JWT, `JwtAuthGuard`, `RolesGuard` + `@Roles()` + `@CurrentUser()`.
 - **Category module** — `GET` (public), `POST`/`DELETE` (admin).
 - **Store module** — `POST`/`GET my`/`PATCH my` (seller), `GET`/`GET :id` (public), `PATCH :id/verify` + `GET admin/all` (admin).
 - **Product module** — `POST`/`GET my`/`PATCH :id`/`DELETE :id` (seller), `GET` (public, search+filter+pagination)/`GET :id` (public). Foto via pola upload-first + `commitFile`. Terverifikasi e2e.
+- **Order module (Phase 6) — backend 100% (e2e 30/30).** Endpoint list, buat, detail, kirim pesan, cancel, admin lock harga USD, admin update status.
 - **Upload module** — `POST /uploads` (semua user login): upload 1 gambar ke staging `tmp/` di R2, return `{ url }`. Validasi size 2MB + MIME + magic bytes.
 - **Storage R2** — kredensial sudah terisi, bucket `eksportir-prod`, public URL aktif. Pola staging→commit lengkap (lihat "Keputusan Upload File").
 - **Cron** — `@nestjs/schedule` aktif; cleanup `tmp/` tiap hari jam 03:00 (file > 24 jam dihapus).
+- **Frontend Buyer & Seller order UI** — dashboard, list pesanan (filter tab), detail + chat 3 pihak (polling 10 dtk), cart FE + checkout per-seller.
+- **SidebarShell + BottomNav** — semua halaman seller & buyer sudah pakai layout konsisten (sidebar desktop + bottom navbar mobile). Shared `OrderStatusBadge` + `OrderStatusTimeline` di `app/_components/`.
 
 ### Endpoint API yang hidup (`http://localhost:3001/api`)
+
 `auth/{buyer,seller}/{register,login}`, `auth/admin/login`, `categories` (GET/POST/DELETE), `stores` (POST, GET, GET :id, GET my, PATCH my, PATCH :id/verify, GET admin/all), `products` (POST, GET my, PATCH :id, DELETE :id, GET, GET :id), `uploads` (POST), `orders` (POST [buyer], GET my [buyer/seller], GET :id [pemilik], POST :id/messages, PATCH :id/cancel [buyer], GET [admin], PATCH :id/lock [admin], PATCH :id/status [admin]).
 
 > **Order module (Phase 6) — backend selesai, e2e 30/30.** 1 order = 1 seller; item di-snapshot (nama+harga IDR) saat dibuat; `note` buyer jadi pesan pembuka chat 3 pihak. Status: `PENDING` → `NEGOTIATION` (auto saat pesan pertama masuk) → `CONFIRMED` (admin `lock` harga final USD) → `PAID`/`QC_PROCESS`/`SHIPPING`/… (admin `status`). Cancel buyer hanya saat PENDING/NEGOTIATION. **Cart hidup di FE (localStorage), checkout per-seller — backend tak punya tabel Cart.** Detail order sudah meng-embed seluruh `messages` (1 fetch, tak perlu endpoint list pesan terpisah).
 
 ### Halaman UI yang sudah ada (`http://localhost:3000`)
-| Path | Untuk |
-|------|-------|
-| `/` | **Katalog publik** — grid produk, search, filter kategori, pagination (harga IDR) |
-| `/products/[id]` | **Detail produk publik** — galeri + variant + harga |
-| `/admin/login` | Login Admin/SuperAdmin |
-| `/buyer/login`, `/buyer/register` | Auth Buyer |
-| `/seller/login`, `/seller/register` | Auth Seller |
-| `/seller/store` | Seller buat/edit toko |
-| `/seller/products`, `/seller/products/new`, `/seller/products/[id]/edit` | Seller kelola produk |
-| `/admin/categories` | Admin kelola kategori |
-| `/admin/stores` | Admin verifikasi toko |
+
+| Path                                                                     | Untuk                                                                             |
+| ------------------------------------------------------------------------ | --------------------------------------------------------------------------------- |
+| `/`                                                                      | **Katalog publik** — grid produk, search, filter kategori, pagination (harga IDR) |
+| `/products/[id]`                                                         | **Detail produk publik** — galeri + variant + harga                               |
+| `/admin/login`                                                           | Login Admin/SuperAdmin                                                            |
+| `/buyer/login`, `/buyer/register`                                        | Auth Buyer                                                                        |
+| `/seller/login`, `/seller/register`                                      | Auth Seller                                                                       |
+| `/seller`                                                                | Dashboard Seller (summary + recent orders + quick links)                          |
+| `/seller/store`                                                          | Seller buat/edit toko                                                             |
+| `/seller/products`, `/seller/products/new`, `/seller/products/[id]/edit` | Seller kelola produk                                                              |
+| `/seller/orders`, `/seller/orders/[id]`                                  | Seller order masuk + detail + chat negosiasi 3 pihak                              |
+| `/buyer`                                                                 | Dashboard Buyer (summary + recent orders + quick links)                           |
+| `/buyer/orders`, `/buyer/orders/[id]`, `/buyer/orders/new`               | Buyer list order, detail + chat + cancel, checkout cart                           |
+| `/admin/categories`                                                      | Admin kelola kategori                                                             |
+| `/admin/stores`                                                          | Admin verifikasi toko                                                             |
 
 > **Seeder demo:** `cd eksportir-api && npm run seed:sellers` → 4 seller (semua pw `seller123`: budi/wayan/made/kadek @eksportir.com) masing-masing 5 produk verified. Foto = picsum (data bohongan).
 
 ### URL penting
+
 - API: `http://localhost:3001/api`
 - **Scalar API Docs: `http://localhost:3001/docs`** (sudah aktif sejak Phase 0; endpoint baru otomatis terdokumentasi via decorator `@ApiTags`/`@ApiOperation`)
 - Frontend: `http://localhost:3000`
 
 ### Arsitektur data-fetching Frontend
+
 - **SWR + Axios** (BUKAN React Query). GET pakai `useSWR` + fetcher axios; mutasi pakai `api.post/patch/delete` lalu `mutate()`. Selalu import instance `@/lib/axios`, jangan bikin axios baru.
 - Belum ada global auth state / middleware proteksi route — halaman protected mengandalkan token di `localStorage` + interceptor 401 (akan dirapikan di phase auth state).
 
@@ -75,6 +87,7 @@ Upload **dipisah dari submit data** — bukan multipart sekaligus. Pola **upload
 ```
 
 **Alasan keputusan:**
+
 - Upload terpisah → request data tetap JSON murni; user bisa upload sambil isi form; bisa preview sebelum submit; retry granular.
 - Validasi **hanya** di Backend yang mengikat (FE bisa di-bypass via curl/Postman). Magic-bytes dicek karena MIME header bisa dipalsukan.
 - File **tidak pernah dieksekusi** di BE — hanya buffer di RAM lalu stream ke R2 (object storage tidak execute apapun). Aman dari "malicious file".
@@ -87,15 +100,15 @@ Upload **dipisah dari submit data** — bukan multipart sekaligus. Pola **upload
 
 ## Tech Stack
 
-| Layer | Teknologi |
-|-------|-----------|
-| Frontend | Next.js 16, Tailwind CSS v4, TypeScript |
-| Backend | NestJS 11, TypeScript, `"type": "module"` (ESM) |
-| Database | PostgreSQL 17 via Docker + Prisma ORM v7 |
-| Auth | JWT (Access Token) — 3 endpoint terpisah per user type |
-| File Storage | Cloudflare R2 (S3-compatible) |
-| Validation | class-validator + class-transformer |
-| API Client (FE) | Axios (`lib/axios.ts`) + SWR |
+| Layer           | Teknologi                                              |
+| --------------- | ------------------------------------------------------ |
+| Frontend        | Next.js 16, Tailwind CSS v4, TypeScript                |
+| Backend         | NestJS 11, TypeScript, `"type": "module"` (ESM)        |
+| Database        | PostgreSQL 17 via Docker + Prisma ORM v7               |
+| Auth            | JWT (Access Token) — 3 endpoint terpisah per user type |
+| File Storage    | Cloudflare R2 (S3-compatible)                          |
+| Validation      | class-validator + class-transformer                    |
+| API Client (FE) | Axios (`lib/axios.ts`) + SWR                           |
 
 ---
 
@@ -118,22 +131,33 @@ Prisma 7 mengubah cara koneksi database secara signifikan:
 
 ## Setup Lokal
 
+> ⚠️ **Prisma migrate wajib via Telkomsel.** `prisma migrate deploy` / `prisma db seed` ke Supabase hanya berhasil dari jaringan Telkomsel. Koneksi ISP/WiFi lain konsisten gagal (diduga routing/blokir port ke Supabase AP-Southeast). Pastikan hotspot Telkomsel aktif saat migrate.
+
 ### Menjalankan Backend
+
 ```bash
 cd eksportir-api
-docker compose up -d          # PostgreSQL 17 di port 5432
+# Tidak perlu docker compose — DB ada di Supabase
 npm install
-npx prisma migrate deploy
-npx prisma db seed             # Buat SuperAdmin default
+npx prisma migrate deploy   # wajib jaringan Telkomsel
+npx prisma db seed          # wajib jaringan Telkomsel
 npm run start:dev
 ```
 
+### Database — Supabase (sejak 2026-07-12)
+
+- `DATABASE_URL` → pooler port **6543** (`?pgbouncer=true`) — runtime app (PrismaService).
+- `DIRECT_URL` → pooler port **5432** — Prisma CLI (migrate/seed/introspect).
+- Docker PostgreSQL lokal sudah dihapus. `docker-compose.yml` di VPS tidak lagi punya service `postgres`.
+
 ### Akun Default (Development)
-| Role | Email | Password | Login Endpoint |
-|------|-------|----------|----------------|
+
+| Role       | Email                    | Password      | Login Endpoint             |
+| ---------- | ------------------------ | ------------- | -------------------------- |
 | SuperAdmin | superadmin@eksportir.com | superadmin123 | POST /api/auth/admin/login |
 
 ### URL Lokal
+
 - API: `http://localhost:3001/api`
 - Scalar Docs: `http://localhost:3001/docs`
 - Frontend: `http://localhost:3000`
@@ -153,6 +177,7 @@ AdminUser   → TIDAK ada self-register, dibuat langsung oleh SuperAdmin
 ```
 
 **Catatan penting:**
+
 - 1 orang TIDAK bisa jadi Seller sekaligus Buyer dengan 1 akun — harus beda akun
 - Boleh menggunakan nomor telepon yang sama di akun Buyer dan Seller
 - `AdminUser` memiliki field `role` enum: `ADMIN | SUPER_ADMIN`
@@ -209,6 +234,7 @@ ProductVariant
 ```
 
 **Aturan variant:**
+
 - Variant bersifat **1 dimensi / simple** — nama free-text, tidak ada kombinasi atribut (ukuran × warna)
 - Minimal **1 variant wajib** ada per produk
 - Foto variant nullable — kalau kosong, FE yang handle fallback
@@ -216,6 +242,7 @@ ProductVariant
 - Kalau Seller hanya punya 1 jenis, cukup isi nama variant "Default" atau nama produknya langsung
 
 **Foto produk:**
+
 - `ProductImage` — untuk gallery di halaman produk (carousel di FE), bisa kosong
 - `ProductVariant.foto` — 1 foto per variant, nullable
 
@@ -291,18 +318,20 @@ Perlu table `OrderMessage` untuk menyimpan chat 3 pihak per order.
 ## Keputusan Internasionalisasi (i18n)
 
 ### Library
+
 `next-intl` — untuk Next.js App Router, locale-based routing.
 
 ### Bahasa per Area
 
-| Area | Bahasa | Default |
-|------|--------|---------|
-| Public pages (landing, produk, toko) | EN + RU | EN |
-| Buyer dashboard | EN + RU | EN |
-| Seller dashboard | EN + ID | EN |
-| Admin dashboard | EN + ID | EN |
+| Area                                 | Bahasa  | Default |
+| ------------------------------------ | ------- | ------- |
+| Public pages (landing, produk, toko) | EN + RU | EN      |
+| Buyer dashboard                      | EN + RU | EN      |
+| Seller dashboard                     | EN + ID | EN      |
+| Admin dashboard                      | EN + ID | EN      |
 
 ### Struktur URL
+
 ```
 /en/products        ← English (public & buyer)
 /ru/products        ← Russian (public & buyer)
@@ -311,6 +340,7 @@ Perlu table `OrderMessage` untuk menyimpan chat 3 pihak per order.
 ```
 
 ### Aturan Konten
+
 - **UI elements** (tombol, label, navbar, footer, alert, warning, form placeholder) → wajib diterjemahkan
 - **Konten produk** (nama, deskripsi, nama varian) → TIDAK diterjemahkan, tetap bahasa Seller (ID/EN/Bali)
 - **Konten chat/negosiasi** → TIDAK diterjemahkan, apa adanya
@@ -321,6 +351,7 @@ Perlu table `OrderMessage` untuk menyimpan chat 3 pihak per order.
 ## Keputusan Currency Display
 
 ### Prinsip Utama
+
 - **Harga listing Seller** → IDR (input Seller)
 - **Harga deal dikunci** → USD (Admin lock setelah negosiasi)
 - **Actual payment** → USDT (TRC20/ERC20)
@@ -331,6 +362,7 @@ CNY disertakan karena Buyer Rusia kemungkinan menggunakan Yuan sebagai jalur kon
 Selalu tampilkan disclaimer kecil: **"Prices in RUB/CNY are indicative. Actual payment in USDT."**
 
 ### Sumber Kurs
+
 Kurs disimpan di DB. **SuperAdmin input manual dulu** — cron job otomatis dipikirkan belakangan.
 Admin dapat **memantau** kurs terkini di dashboard.
 **SuperAdmin** dapat melakukan **override manual** kurs kapan saja (otorisasi tertinggi).
@@ -340,6 +372,7 @@ Pasangan kurs yang dikelola: `USD→RUB`, `USD→CNY`, `USDT→IDR`.
 > SuperAdmin tetap bisa override manual bahkan setelah cron aktif.
 
 ### Schema `ExchangeRate`
+
 ```
 ExchangeRate
 ├── id

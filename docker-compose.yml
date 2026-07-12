@@ -1,24 +1,4 @@
 services:
-  postgres:
-    image: postgres:17-alpine
-    container_name: eksportir-db
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: eksportir
-      POSTGRES_PASSWORD: eksportir_secret
-      POSTGRES_DB: eksportir
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U eksportir -d eksportir"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-    networks:
-      - eksportir-net
-
   api:
     image: ghcr.io/oscarhermawan17/eksportir-api:latest
     build:
@@ -26,11 +6,6 @@ services:
     container_name: eksportir-api
     restart: unless-stopped
     env_file: ./eksportir-api/.env
-    environment:
-      DATABASE_URL: postgresql://eksportir:eksportir_secret@postgres:5432/eksportir
-    depends_on:
-      postgres:
-        condition: service_healthy
     networks:
       - eksportir-net
 
@@ -65,6 +40,3 @@ services:
 networks:
   eksportir-net:
     driver: bridge
-
-volumes:
-  postgres_data:
